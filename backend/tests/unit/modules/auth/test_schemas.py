@@ -5,7 +5,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.database.models.user import User
-from app.modules.auth.schemas import RegisterRequest, UserResponse
+from app.modules.auth.schemas import LoginRequest, RegisterRequest, UserResponse
 
 
 def test_register_request_accepts_valid_credentials() -> None:
@@ -60,3 +60,21 @@ def test_user_response_excludes_password_hash() -> None:
     assert response_data["email"] == "user@example.com"
     assert response_data["is_verified"] is False
     assert "password_hash" not in response_data
+
+
+def test_login_request_accepts_existing_password() -> None:
+    request = LoginRequest(
+        email="user@example.com",
+        password="existing-password",
+    )
+
+    assert str(request.email) == "user@example.com"
+    assert request.password == "existing-password"
+
+
+def test_login_request_rejects_empty_password() -> None:
+    with pytest.raises(ValidationError):
+        LoginRequest(
+            email="user@example.com",
+            password="",
+        )

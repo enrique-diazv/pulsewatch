@@ -2,7 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import SecretStr
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
@@ -32,6 +32,12 @@ class Settings(BaseSettings):
     database_name: str = "pulsewatch"
     database_user: str = "pulsewatch_app"
     database_password: SecretStr
+    jwt_secret_key: SecretStr = Field(min_length=32)
+    access_token_expire_minutes: int = Field(
+        default=15,
+        ge=1,
+        le=60,
+    )
 
 
 @lru_cache

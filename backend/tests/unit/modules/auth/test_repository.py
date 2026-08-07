@@ -1,4 +1,5 @@
 from unittest.mock import AsyncMock, MagicMock
+from uuid import uuid4
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -52,3 +53,21 @@ async def test_create_adds_and_flushes_user() -> None:
     assert user.password_hash == "hashed-password"
     session.add.assert_called_once_with(user)
     session.flush.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_get_by_id_returns_user() -> None:
+    user_id = uuid4()
+    user = User(
+        id=user_id,
+        email="user@example.com",
+        password_hash="hashed-password",
+    )
+    session = AsyncMock(spec=AsyncSession)
+    session.get.return_value = user
+    repository = UserRepository(session)
+
+    found_user = await repository.get_by_id(user_id)
+
+    assert found_user is user
+    session.get.assert_awaited_once_with(User, user_id)
