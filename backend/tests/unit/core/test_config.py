@@ -7,6 +7,7 @@ SETTING_VARIABLES = (
     "APP_VERSION",
     "ENVIRONMENT",
     "DEBUG",
+    "LOG_LEVEL",
     "DATABASE_HOST",
     "DATABASE_PORT",
     "DATABASE_NAME",
@@ -27,6 +28,7 @@ def test_settings_use_default_values(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.app_version == "0.1.0"
     assert settings.environment == "development"
     assert settings.debug is False
+    assert settings.log_level == "INFO"
     assert settings.database_host == "127.0.0.1"
     assert settings.database_port == 5432
     assert settings.database_name == "pulsewatch"
@@ -47,13 +49,14 @@ def test_settings_read_environment_variables(
     monkeypatch.setenv("DATABASE_NAME", "pulsewatch_test")
     monkeypatch.setenv("DATABASE_USER", "pulsewatch_test_user")
     monkeypatch.setenv("DATABASE_PASSWORD", "another-test-password")
-
+    monkeypatch.setenv("LOG_LEVEL", "DEBUG")
     settings = Settings(_env_file=None)
 
     assert settings.app_name == "PulseWatch Test API"
     assert settings.app_version == "9.9.9"
     assert settings.environment == "testing"
     assert settings.debug is True
+    assert settings.log_level == "DEBUG"
     assert settings.database_host == "database.example.test"
     assert settings.database_port == 55432
     assert settings.database_name == "pulsewatch_test"

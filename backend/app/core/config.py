@@ -20,7 +20,13 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     environment: Literal["development", "testing", "production"] = "development"
     debug: bool = False
-
+    log_level: Literal[
+        "DEBUG",
+        "INFO",
+        "WARNING",
+        "ERROR",
+        "CRITICAL",
+    ] = "INFO"
     database_host: str = "127.0.0.1"
     database_port: int = 5432
     database_name: str = "pulsewatch"
