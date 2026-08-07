@@ -1,0 +1,2 @@
+fastapi[standard-no-fastapi-cloud-cli]==0.139.2
+pydantic-settings==2.14.2
