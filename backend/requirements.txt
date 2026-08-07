@@ -1,4 +1,5 @@
 alembic==1.18.5
+email-validator==2.3.0
 fastapi[standard-no-fastapi-cloud-cli]==0.139.2
 psycopg[binary]==3.3.4
 pwdlib[argon2]==0.3.0
