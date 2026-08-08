@@ -303,3 +303,39 @@ def test_refresh_rejects_invalid_cookie(client: TestClient) -> None:
         "detail": "Invalid or expired refresh token",
     }
     assert "Max-Age=0" in response.headers["set-cookie"]
+
+
+def test_logout_revokes_token_and_clears_cookie(
+    client: TestClient,
+) -> None:
+    client.cookies.set(
+        "pulsewatch_refresh_token",
+        "raw-refresh-token",
+    )
+
+    with patch(
+        "app.api.v1.endpoints.auth.RefreshTokenService.revoke",
+        new_callable=AsyncMock,
+        return_value=True,
+    ) as revoke:
+        response = client.post("/api/v1/auth/logout")
+
+    assert response.status_code == 204
+    assert response.content == b""
+    revoke.assert_awaited_once_with("raw-refresh-token")
+    assert "Max-Age=0" in response.headers["set-cookie"]
+
+
+def test_logout_without_cookie_is_idempotent(
+    client: TestClient,
+) -> None:
+    with patch(
+        "app.api.v1.endpoints.auth.RefreshTokenService.revoke",
+        new_callable=AsyncMock,
+    ) as revoke:
+        response = client.post("/api/v1/auth/logout")
+
+    assert response.status_code == 204
+    assert response.content == b""
+    revoke.assert_not_awaited()
+    assert "Max-Age=0" in response.headers["set-cookie"]

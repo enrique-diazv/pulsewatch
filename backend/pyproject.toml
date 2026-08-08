@@ -3,6 +3,7 @@ addopts = [
     "-ra",
     "--strict-config",
     "--strict-markers",
+    "--import-mode=importlib",
 ]
 pythonpath = ["."]
 testpaths = ["tests"]

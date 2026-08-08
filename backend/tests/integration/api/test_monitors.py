@@ -1,0 +1,272 @@
+from collections.abc import AsyncIterator, Iterator
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, patch
+from uuid import UUID, uuid4
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database.models.monitor import Monitor
+from app.database.models.user import User
+from app.database.session import get_database_session
+from app.main import app
+from app.modules.auth.dependencies import get_current_user
+from app.modules.monitors.enums import HttpMethod, MonitorStatus
+from app.modules.monitors.exceptions import MonitorNotFoundError
+
+
+@pytest.fixture
+def current_user() -> User:
+    return User(
+        id=uuid4(),
+        email="user@example.com",
+        password_hash="hashed-password",
+    )
+
+
+@pytest.fixture
+def database_session() -> AsyncMock:
+    return AsyncMock(spec=AsyncSession)
+
+
+@pytest.fixture
+def client(
+    current_user: User,
+    database_session: AsyncMock,
+) -> Iterator[TestClient]:
+    async def override_database_session() -> AsyncIterator[AsyncSession]:
+        yield database_session
+
+    app.dependency_overrides[get_database_session] = override_database_session
+    app.dependency_overrides[get_current_user] = lambda: current_user
+
+    try:
+        with TestClient(app) as test_client:
+            yield test_client
+    finally:
+        app.dependency_overrides.clear()
+
+
+def create_monitor(user_id: UUID) -> Monitor:
+    timestamp = datetime(2026, 8, 8, tzinfo=UTC)
+
+    return Monitor(
+        id=uuid4(),
+        user_id=user_id,
+        name="Production API",
+        url="https://api.example.com/health",
+        method=HttpMethod.GET,
+        interval_seconds=60,
+        timeout_seconds=5,
+        expected_status=200,
+        status=MonitorStatus.UNKNOWN,
+        failure_threshold=3,
+        recovery_threshold=2,
+        consecutive_failures=0,
+        consecutive_successes=0,
+        is_active=True,
+        last_checked_at=None,
+        next_check_at=timestamp,
+        created_at=timestamp,
+        updated_at=timestamp,
+    )
+
+
+def test_create_monitor_returns_owned_monitor(
+    client: TestClient,
+    current_user: User,
+) -> None:
+    monitor = create_monitor(current_user.id)
+
+    with patch(
+        "app.api.v1.endpoints.monitors.MonitorService.create",
+        new_callable=AsyncMock,
+        return_value=monitor,
+    ) as create:
+        response = client.post(
+            "/api/v1/monitors",
+            json={
+                "name": "Production API",
+                "url": "https://api.example.com/health",
+            },
+        )
+
+    assert response.status_code == 201
+    assert response.json()["id"] == str(monitor.id)
+    assert response.json()["name"] == "Production API"
+    assert response.json()["status"] == "UNKNOWN"
+    assert "user_id" not in response.json()
+    create.assert_awaited_once()
+
+
+def test_list_monitors_returns_owned_monitors(
+    client: TestClient,
+    current_user: User,
+) -> None:
+    monitor = create_monitor(current_user.id)
+
+    with patch(
+        "app.api.v1.endpoints.monitors.MonitorService.list_for_user",
+        new_callable=AsyncMock,
+        return_value=[monitor],
+    ):
+        response = client.get("/api/v1/monitors")
+
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+    assert response.json()[0]["id"] == str(monitor.id)
+    assert "user_id" not in response.json()[0]
+
+
+def test_get_monitor_returns_owned_monitor(
+    client: TestClient,
+    current_user: User,
+) -> None:
+    monitor = create_monitor(current_user.id)
+
+    with patch(
+        "app.api.v1.endpoints.monitors.MonitorService.get_for_user",
+        new_callable=AsyncMock,
+        return_value=monitor,
+    ):
+        response = client.get(f"/api/v1/monitors/{monitor.id}")
+
+    assert response.status_code == 200
+    assert response.json()["id"] == str(monitor.id)
+
+
+def test_get_monitor_returns_not_found_for_unowned_monitor(
+    client: TestClient,
+) -> None:
+    monitor_id = uuid4()
+
+    with patch(
+        "app.api.v1.endpoints.monitors.MonitorService.get_for_user",
+        new_callable=AsyncMock,
+        side_effect=MonitorNotFoundError,
+    ):
+        response = client.get(f"/api/v1/monitors/{monitor_id}")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Monitor not found"}
+
+
+def test_monitors_require_authentication(
+    database_session: AsyncMock,
+) -> None:
+    async def override_database_session() -> AsyncIterator[AsyncSession]:
+        yield database_session
+
+    app.dependency_overrides[get_database_session] = override_database_session
+
+    try:
+        with TestClient(app) as test_client:
+            response = test_client.get("/api/v1/monitors")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 401
+
+
+def test_update_monitor_returns_updated_monitor(
+    client: TestClient,
+    current_user: User,
+) -> None:
+    monitor = create_monitor(current_user.id)
+    monitor.name = "Updated API"
+    monitor.interval_seconds = 120
+
+    with patch(
+        "app.api.v1.endpoints.monitors.MonitorService.update",
+        new_callable=AsyncMock,
+        return_value=monitor,
+    ) as update:
+        response = client.patch(
+            f"/api/v1/monitors/{monitor.id}",
+            json={
+                "name": "Updated API",
+                "interval_seconds": 120,
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["name"] == "Updated API"
+    assert response.json()["interval_seconds"] == 120
+    update.assert_awaited_once()
+
+
+def test_update_monitor_rejects_empty_body(
+    client: TestClient,
+) -> None:
+    with patch(
+        "app.api.v1.endpoints.monitors.MonitorService.update",
+        new_callable=AsyncMock,
+    ) as update:
+        response = client.patch(
+            f"/api/v1/monitors/{uuid4()}",
+            json={},
+        )
+
+    assert response.status_code == 422
+    update.assert_not_awaited()
+
+
+def test_delete_monitor_returns_no_content(
+    client: TestClient,
+) -> None:
+    monitor_id = uuid4()
+
+    with patch(
+        "app.api.v1.endpoints.monitors.MonitorService.delete",
+        new_callable=AsyncMock,
+    ) as delete:
+        response = client.delete(
+            f"/api/v1/monitors/{monitor_id}",
+        )
+
+    assert response.status_code == 204
+    assert response.content == b""
+    delete.assert_awaited_once()
+
+
+def test_pause_monitor_returns_paused_monitor(
+    client: TestClient,
+    current_user: User,
+) -> None:
+    monitor = create_monitor(current_user.id)
+    monitor.is_active = False
+    monitor.status = MonitorStatus.PAUSED
+
+    with patch(
+        "app.api.v1.endpoints.monitors.MonitorService.pause",
+        new_callable=AsyncMock,
+        return_value=monitor,
+    ):
+        response = client.post(
+            f"/api/v1/monitors/{monitor.id}/pause",
+        )
+
+    assert response.status_code == 200
+    assert response.json()["is_active"] is False
+    assert response.json()["status"] == "PAUSED"
+
+
+def test_resume_monitor_returns_unknown_active_monitor(
+    client: TestClient,
+    current_user: User,
+) -> None:
+    monitor = create_monitor(current_user.id)
+
+    with patch(
+        "app.api.v1.endpoints.monitors.MonitorService.resume",
+        new_callable=AsyncMock,
+        return_value=monitor,
+    ):
+        response = client.post(
+            f"/api/v1/monitors/{monitor.id}/resume",
+        )
+
+    assert response.status_code == 200
+    assert response.json()["is_active"] is True
+    assert response.json()["status"] == "UNKNOWN"
