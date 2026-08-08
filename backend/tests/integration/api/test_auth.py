@@ -14,7 +14,9 @@ from app.modules.auth.dependencies import get_current_user
 from app.modules.auth.exceptions import (
     EmailAlreadyRegisteredError,
     InvalidCredentialsError,
+    InvalidRefreshTokenError,
 )
+from app.modules.auth.refresh_token_service import RefreshTokenRotation
 
 
 @pytest.fixture
@@ -125,6 +127,11 @@ def test_login_returns_access_token(client: TestClient) -> None:
             "app.api.v1.endpoints.auth.create_access_token",
             return_value="signed-access-token",
         ) as token_creator,
+        patch(
+            "app.api.v1.endpoints.auth.RefreshTokenService.issue",
+            new_callable=AsyncMock,
+            return_value="raw-refresh-token",
+        ) as refresh_issuer,
     ):
         response = client.post(
             "/api/v1/auth/login",
@@ -142,6 +149,13 @@ def test_login_returns_access_token(client: TestClient) -> None:
     }
     authenticate.assert_awaited_once()
     token_creator.assert_called_once_with(user.id)
+    refresh_issuer.assert_awaited_once_with(user.id)
+
+    cookie = response.headers["set-cookie"]
+    assert "pulsewatch_refresh_token=raw-refresh-token" in cookie
+    assert "HttpOnly" in cookie
+    assert "Path=/api/v1/auth" in cookie
+    assert "SameSite=lax" in cookie
 
 
 def test_login_returns_unauthorized_for_invalid_credentials(
@@ -217,3 +231,75 @@ def test_me_requires_access_token(client: TestClient) -> None:
         "detail": "Invalid or missing access token",
     }
     assert response.headers["www-authenticate"] == "Bearer"
+
+
+def test_refresh_rotates_cookie_and_returns_access_token(
+    client: TestClient,
+) -> None:
+    user_id = uuid4()
+    client.cookies.set(
+        "pulsewatch_refresh_token",
+        "old-raw-refresh-token",
+    )
+
+    with (
+        patch(
+            "app.api.v1.endpoints.auth.RefreshTokenService.rotate",
+            new_callable=AsyncMock,
+            return_value=RefreshTokenRotation(
+                user_id=user_id,
+                token="new-raw-refresh-token",
+            ),
+        ) as rotate,
+        patch(
+            "app.api.v1.endpoints.auth.create_access_token",
+            return_value="new-access-token",
+        ),
+    ):
+        response = client.post("/api/v1/auth/refresh")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "access_token": "new-access-token",
+        "token_type": "bearer",
+        "expires_in": 900,
+    }
+    rotate.assert_awaited_once_with("old-raw-refresh-token")
+
+    cookie = response.headers["set-cookie"]
+    assert "pulsewatch_refresh_token=new-raw-refresh-token" in cookie
+    assert "HttpOnly" in cookie
+
+
+def test_refresh_rejects_missing_cookie(client: TestClient) -> None:
+    with patch(
+        "app.api.v1.endpoints.auth.RefreshTokenService.rotate",
+        new_callable=AsyncMock,
+    ) as rotate:
+        response = client.post("/api/v1/auth/refresh")
+
+    assert response.status_code == 401
+    assert response.json() == {
+        "detail": "Invalid or expired refresh token",
+    }
+    rotate.assert_not_awaited()
+
+
+def test_refresh_rejects_invalid_cookie(client: TestClient) -> None:
+    client.cookies.set(
+        "pulsewatch_refresh_token",
+        "invalid-refresh-token",
+    )
+
+    with patch(
+        "app.api.v1.endpoints.auth.RefreshTokenService.rotate",
+        new_callable=AsyncMock,
+        side_effect=InvalidRefreshTokenError,
+    ):
+        response = client.post("/api/v1/auth/refresh")
+
+    assert response.status_code == 401
+    assert response.json() == {
+        "detail": "Invalid or expired refresh token",
+    }
+    assert "Max-Age=0" in response.headers["set-cookie"]

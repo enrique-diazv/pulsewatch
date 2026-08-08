@@ -38,6 +38,11 @@ class Settings(BaseSettings):
         ge=1,
         le=60,
     )
+    refresh_token_expire_days: int = Field(
+        default=30,
+        ge=1,
+        le=90,
+    )
 
 
 @lru_cache

@@ -15,6 +15,7 @@ SETTING_VARIABLES = (
     "DATABASE_PASSWORD",
     "JWT_SECRET_KEY",
     "ACCESS_TOKEN_EXPIRE_MINUTES",
+    "REFRESH_TOKEN_EXPIRE_DAYS",
 )
 
 
@@ -46,6 +47,7 @@ def test_settings_use_default_values(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     assert str(settings.jwt_secret_key) == "**********"
     assert settings.access_token_expire_minutes == 15
+    assert settings.refresh_token_expire_days == 30
 
 
 def test_settings_read_environment_variables(
@@ -66,7 +68,7 @@ def test_settings_read_environment_variables(
         "another-test-jwt-secret-key-over-32-characters",
     )
     monkeypatch.setenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30")
-
+    monkeypatch.setenv("REFRESH_TOKEN_EXPIRE_DAYS", "45")
     settings = Settings(_env_file=None)
 
     assert settings.app_name == "PulseWatch Test API"
@@ -83,3 +85,4 @@ def test_settings_read_environment_variables(
         "another-test-jwt-secret-key-over-32-characters"
     )
     assert settings.access_token_expire_minutes == 30
+    assert settings.refresh_token_expire_days == 45
