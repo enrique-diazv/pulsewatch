@@ -18,6 +18,8 @@ SETTING_VARIABLES = (
     "REFRESH_TOKEN_EXPIRE_DAYS",
     "REDIS_URL",
     "MANUAL_CHECK_COOLDOWN_SECONDS",
+    "SCHEDULER_POLL_INTERVAL_SECONDS",
+    "SCHEDULER_BATCH_SIZE",
 )
 
 
@@ -51,6 +53,8 @@ def test_settings_use_default_values(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.access_token_expire_minutes == 15
     assert settings.refresh_token_expire_days == 30
     assert str(settings.redis_url) == "redis://127.0.0.1:6379/0"
+    assert settings.scheduler_poll_interval_seconds == 10
+    assert settings.scheduler_batch_size == 100
 
 
 def test_settings_read_environment_variables(
@@ -80,6 +84,14 @@ def test_settings_read_environment_variables(
         "MANUAL_CHECK_COOLDOWN_SECONDS",
         "30",
     )
+    monkeypatch.setenv(
+        "SCHEDULER_POLL_INTERVAL_SECONDS",
+        "5",
+    )
+    monkeypatch.setenv(
+        "SCHEDULER_BATCH_SIZE",
+        "250",
+    )
     settings = Settings(_env_file=None)
 
     assert settings.app_name == "PulseWatch Test API"
@@ -99,3 +111,5 @@ def test_settings_read_environment_variables(
     assert settings.refresh_token_expire_days == 45
     assert str(settings.redis_url) == "redis://cache.example.test:6380/2"
     assert settings.manual_check_cooldown_seconds == 30
+    assert settings.scheduler_poll_interval_seconds == 5
+    assert settings.scheduler_batch_size == 250

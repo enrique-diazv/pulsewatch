@@ -8,6 +8,7 @@ def test_create_celery_app_uses_secure_worker_defaults() -> None:
         database_password="test-password",
         jwt_secret_key="test-jwt-secret-key-with-at-least-32-characters",
         redis_url="redis://127.0.0.1:6379/3",
+        scheduler_poll_interval_seconds=7,
     )
 
     application = create_celery_app(settings)
@@ -23,3 +24,13 @@ def test_create_celery_app_uses_secure_worker_defaults() -> None:
     assert application.conf.task_default_queue == "monitoring"
     assert application.conf.enable_utc is True
     assert application.conf.timezone == "UTC"
+
+    assert application.conf.include == (
+        "app.workers.monitor_tasks",
+        "app.workers.scheduler_tasks",
+    )
+
+    schedule = application.conf.beat_schedule["schedule-due-monitors"]
+    assert schedule["task"] == ("app.workers.scheduler_tasks.schedule_due_monitors")
+    assert schedule["schedule"] == 7.0
+    assert schedule["options"] == {"queue": "monitoring"}

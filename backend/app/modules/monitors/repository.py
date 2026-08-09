@@ -1,3 +1,4 @@
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import select
@@ -50,3 +51,26 @@ class MonitorRepository:
         result = await self.session.execute(statement)
 
         return result.scalar_one_or_none()
+
+    async def list_due_for_update(
+        self,
+        due_at: datetime,
+        *,
+        limit: int,
+    ) -> list[Monitor]:
+        statement = (
+            select(Monitor)
+            .where(
+                Monitor.is_active.is_(True),
+                Monitor.next_check_at <= due_at,
+            )
+            .order_by(
+                Monitor.next_check_at.asc(),
+                Monitor.id.asc(),
+            )
+            .limit(limit)
+            .with_for_update(skip_locked=True)
+        )
+        result = await self.session.execute(statement)
+
+        return list(result.scalars().all())

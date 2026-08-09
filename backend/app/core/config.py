@@ -38,6 +38,16 @@ class Settings(BaseSettings):
         ge=5,
         le=300,
     )
+    scheduler_poll_interval_seconds: int = Field(
+        default=10,
+        ge=1,
+        le=60,
+    )
+    scheduler_batch_size: int = Field(
+        default=100,
+        ge=1,
+        le=1000,
+    )
     jwt_secret_key: SecretStr = Field(min_length=32)
     access_token_expire_minutes: int = Field(
         default=15,

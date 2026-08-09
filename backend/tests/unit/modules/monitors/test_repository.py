@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models.monitor import Monitor
@@ -18,6 +19,37 @@ def create_monitor() -> Monitor:
         timeout_seconds=5,
         next_check_at=datetime.now(UTC),
     )
+
+
+@pytest.mark.anyio
+async def test_list_due_for_update_locks_batch_without_waiting() -> None:
+    session = AsyncMock(spec=AsyncSession)
+    result = MagicMock()
+    monitors = [create_monitor(), create_monitor()]
+    result.scalars.return_value.all.return_value = monitors
+    session.execute.return_value = result
+    repository = MonitorRepository(session)
+    due_at = datetime(2026, 8, 9, tzinfo=UTC)
+
+    due_monitors = await repository.list_due_for_update(
+        due_at,
+        limit=100,
+    )
+
+    assert due_monitors == monitors
+
+    statement = session.execute.await_args.args[0]
+    sql = str(
+        statement.compile(
+            dialect=postgresql.dialect(),
+            compile_kwargs={"literal_binds": True},
+        )
+    )
+
+    assert "monitors.next_check_at <=" in sql
+    assert "ORDER BY monitors.next_check_at ASC, monitors.id ASC" in sql
+    assert "LIMIT 100" in sql
+    assert "FOR UPDATE SKIP LOCKED" in sql
 
 
 @pytest.mark.anyio
