@@ -73,6 +73,7 @@ async def test_execute_monitor_check_runs_active_monitor() -> None:
         )
 
     assert result is monitor_check
+    session.commit.assert_awaited_once()
     repository.get_by_id.assert_awaited_once_with(monitor.id)
     service_class.assert_called_once_with(
         session=session,

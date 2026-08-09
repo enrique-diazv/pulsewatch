@@ -4,6 +4,8 @@ from app.database.models.monitor import Monitor
 from app.database.models.monitor_check import MonitorCheck
 from app.modules.checks.engine import HttpCheckEngine
 from app.modules.checks.repository import MonitorCheckRepository
+from app.modules.incidents.repository import IncidentRepository
+from app.modules.incidents.service import IncidentDetectionService
 
 
 class CheckExecutionService:
@@ -12,10 +14,14 @@ class CheckExecutionService:
         session: AsyncSession,
         engine: HttpCheckEngine,
         repository: MonitorCheckRepository | None = None,
+        incident_service: IncidentDetectionService | None = None,
     ) -> None:
         self.session = session
         self.engine = engine
         self.repository = repository or MonitorCheckRepository(session)
+        self.incident_service = incident_service or IncidentDetectionService(
+            IncidentRepository(session)
+        )
 
     async def execute(self, monitor: Monitor) -> MonitorCheck:
         result = await self.engine.execute(
@@ -35,6 +41,10 @@ class CheckExecutionService:
         )
 
         await self.repository.add(monitor_check)
+        await self.incident_service.process_check(
+            monitor,
+            monitor_check,
+        )
         await self.session.commit()
         await self.session.refresh(monitor_check)
 

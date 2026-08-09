@@ -59,7 +59,7 @@ async def execute_monitor_check(
             extra={"monitor_id": str(monitor_id)},
         )
         return None
-
+    await session.commit()
     engine = HttpCheckEngine(client)
     service = CheckExecutionService(
         session=session,

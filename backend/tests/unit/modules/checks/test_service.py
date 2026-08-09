@@ -10,6 +10,7 @@ from app.modules.checks.engine import HttpCheckEngine
 from app.modules.checks.repository import MonitorCheckRepository
 from app.modules.checks.results import CheckErrorType, HttpCheckResult
 from app.modules.checks.service import CheckExecutionService
+from app.modules.incidents.service import IncidentDetectionService
 
 
 def create_monitor() -> Monitor:
@@ -30,6 +31,7 @@ async def test_execute_stores_successful_result() -> None:
     session = AsyncMock(spec=AsyncSession)
     engine = AsyncMock(spec=HttpCheckEngine)
     repository = AsyncMock(spec=MonitorCheckRepository)
+    incident_service = AsyncMock(spec=IncidentDetectionService)
     repository.add.side_effect = lambda monitor_check: monitor_check
     engine.execute.return_value = HttpCheckResult(
         success=True,
@@ -40,6 +42,7 @@ async def test_execute_stores_successful_result() -> None:
         session=session,
         engine=engine,
         repository=repository,
+        incident_service=incident_service,
     )
     monitor = create_monitor()
 
@@ -56,6 +59,10 @@ async def test_execute_stores_successful_result() -> None:
         expected_status=monitor.expected_status,
     )
     repository.add.assert_awaited_once_with(monitor_check)
+    incident_service.process_check.assert_awaited_once_with(
+        monitor,
+        monitor_check,
+    )
     session.commit.assert_awaited_once()
     session.refresh.assert_awaited_once_with(monitor_check)
 
@@ -65,6 +72,7 @@ async def test_execute_stores_classified_failure() -> None:
     session = AsyncMock(spec=AsyncSession)
     engine = AsyncMock(spec=HttpCheckEngine)
     repository = AsyncMock(spec=MonitorCheckRepository)
+    incident_service = AsyncMock(spec=IncidentDetectionService)
     repository.add.side_effect = lambda monitor_check: monitor_check
     engine.execute.return_value = HttpCheckResult(
         success=False,
@@ -77,11 +85,18 @@ async def test_execute_stores_classified_failure() -> None:
         session=session,
         engine=engine,
         repository=repository,
+        incident_service=incident_service,
     )
+    monitor = create_monitor()
 
-    monitor_check = await service.execute(create_monitor())
+    monitor_check = await service.execute(monitor)
 
     assert monitor_check.success is False
     assert monitor_check.status_code is None
     assert monitor_check.error_type == "TIMEOUT"
     assert monitor_check.error_message == "Request timed out"
+    incident_service.process_check.assert_awaited_once_with(
+        monitor,
+        monitor_check,
+    )
+    session.commit.assert_awaited_once()
