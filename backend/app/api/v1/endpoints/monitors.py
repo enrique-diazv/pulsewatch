@@ -4,10 +4,14 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.database.models.monitor import Monitor
 from app.database.models.user import User
 from app.database.session import get_database_session
 from app.modules.auth.dependencies import get_current_user
+from app.modules.checks.queue import enqueue_monitor_check
+from app.modules.checks.rate_limit import reserve_manual_check_slot
+from app.modules.checks.schemas import CheckQueuedResponse
 from app.modules.monitors.exceptions import MonitorNotFoundError
 from app.modules.monitors.schemas import MonitorCreate, MonitorResponse, MonitorUpdate
 from app.modules.monitors.service import MonitorService
@@ -165,3 +169,42 @@ async def resume_monitor(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(error),
         ) from error
+
+
+@router.post(
+    "/{monitor_id}/check",
+    response_model=CheckQueuedResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Queue manual monitor check",
+)
+async def queue_manual_monitor_check(
+    monitor_id: UUID,
+    current_user: CurrentUser,
+    session: DatabaseSession,
+) -> CheckQueuedResponse:
+    try:
+        monitor = await MonitorService(session).get_for_user(
+            monitor_id,
+            current_user.id,
+        )
+    except MonitorNotFoundError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(error),
+        ) from error
+    reserved = await reserve_manual_check_slot(
+        current_user.id,
+        monitor.id,
+    )
+
+    if not reserved:
+        cooldown_seconds = get_settings().manual_check_cooldown_seconds
+
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Manual check cooldown active",
+            headers={"Retry-After": str(cooldown_seconds)},
+        )
+    task_id = enqueue_monitor_check(monitor.id)
+
+    return CheckQueuedResponse(task_id=task_id)

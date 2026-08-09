@@ -270,3 +270,102 @@ def test_resume_monitor_returns_unknown_active_monitor(
     assert response.status_code == 200
     assert response.json()["is_active"] is True
     assert response.json()["status"] == "UNKNOWN"
+
+
+def test_manual_check_queues_owned_monitor(
+    client: TestClient,
+    current_user: User,
+) -> None:
+    monitor = create_monitor(current_user.id)
+
+    with (
+        patch(
+            "app.api.v1.endpoints.monitors.MonitorService.get_for_user",
+            new_callable=AsyncMock,
+            return_value=monitor,
+        ) as get_for_user,
+        patch(
+            "app.api.v1.endpoints.monitors.enqueue_monitor_check",
+            return_value="task-id",
+        ) as enqueue,
+        patch(
+            "app.api.v1.endpoints.monitors.reserve_manual_check_slot",
+            new_callable=AsyncMock,
+            return_value=True,
+        ) as reserve,
+    ):
+        response = client.post(
+            f"/api/v1/monitors/{monitor.id}/check",
+        )
+
+    assert response.status_code == 202
+    assert response.json() == {
+        "task_id": "task-id",
+        "status": "queued",
+    }
+    get_for_user.assert_awaited_once_with(
+        monitor.id,
+        current_user.id,
+    )
+    reserve.assert_awaited_once_with(
+        current_user.id,
+        monitor.id,
+    )
+    enqueue.assert_called_once_with(monitor.id)
+
+
+def test_manual_check_hides_unowned_monitor(
+    client: TestClient,
+) -> None:
+    monitor_id = uuid4()
+
+    with (
+        patch(
+            "app.api.v1.endpoints.monitors.MonitorService.get_for_user",
+            new_callable=AsyncMock,
+            side_effect=MonitorNotFoundError,
+        ),
+        patch(
+            "app.api.v1.endpoints.monitors.enqueue_monitor_check",
+        ) as enqueue,
+    ):
+        response = client.post(
+            f"/api/v1/monitors/{monitor_id}/check",
+        )
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Monitor not found"}
+    enqueue.assert_not_called()
+
+
+def test_manual_check_enforces_cooldown(
+    client: TestClient,
+    current_user: User,
+) -> None:
+    monitor = create_monitor(current_user.id)
+
+    with (
+        patch(
+            "app.api.v1.endpoints.monitors.MonitorService.get_for_user",
+            new_callable=AsyncMock,
+            return_value=monitor,
+        ),
+        patch(
+            "app.api.v1.endpoints.monitors.reserve_manual_check_slot",
+            new_callable=AsyncMock,
+            return_value=False,
+        ),
+        patch(
+            "app.api.v1.endpoints.monitors.enqueue_monitor_check",
+        ) as enqueue,
+    ):
+        response = client.post(
+            f"/api/v1/monitors/{monitor.id}/check",
+        )
+
+    assert response.status_code == 429
+    assert response.json() == {
+        "detail": "Manual check cooldown active",
+    }
+    assert response.headers["retry-after"] == "10"
+    enqueue.assert_not_called()

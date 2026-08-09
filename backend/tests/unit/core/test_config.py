@@ -16,6 +16,8 @@ SETTING_VARIABLES = (
     "JWT_SECRET_KEY",
     "ACCESS_TOKEN_EXPIRE_MINUTES",
     "REFRESH_TOKEN_EXPIRE_DAYS",
+    "REDIS_URL",
+    "MANUAL_CHECK_COOLDOWN_SECONDS",
 )
 
 
@@ -30,7 +32,7 @@ def test_settings_use_default_values(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
     settings = Settings(_env_file=None)
-
+    assert settings.manual_check_cooldown_seconds == 10
     assert settings.app_name == "PulseWatch API"
     assert settings.app_version == "0.1.0"
     assert settings.environment == "development"
@@ -48,6 +50,7 @@ def test_settings_use_default_values(monkeypatch: pytest.MonkeyPatch) -> None:
     assert str(settings.jwt_secret_key) == "**********"
     assert settings.access_token_expire_minutes == 15
     assert settings.refresh_token_expire_days == 30
+    assert str(settings.redis_url) == "redis://127.0.0.1:6379/0"
 
 
 def test_settings_read_environment_variables(
@@ -69,6 +72,14 @@ def test_settings_read_environment_variables(
     )
     monkeypatch.setenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30")
     monkeypatch.setenv("REFRESH_TOKEN_EXPIRE_DAYS", "45")
+    monkeypatch.setenv(
+        "REDIS_URL",
+        "redis://cache.example.test:6380/2",
+    )
+    monkeypatch.setenv(
+        "MANUAL_CHECK_COOLDOWN_SECONDS",
+        "30",
+    )
     settings = Settings(_env_file=None)
 
     assert settings.app_name == "PulseWatch Test API"
@@ -86,3 +97,5 @@ def test_settings_read_environment_variables(
     )
     assert settings.access_token_expire_minutes == 30
     assert settings.refresh_token_expire_days == 45
+    assert str(settings.redis_url) == "redis://cache.example.test:6380/2"
+    assert settings.manual_check_cooldown_seconds == 30

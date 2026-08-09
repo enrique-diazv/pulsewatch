@@ -76,3 +76,18 @@ async def test_delete_removes_monitor() -> None:
     await repository.delete(monitor)
 
     session.delete.assert_awaited_once_with(monitor)
+
+
+@pytest.mark.anyio
+async def test_get_by_id_returns_monitor_for_worker() -> None:
+    session = AsyncMock(spec=AsyncSession)
+    result = MagicMock()
+    monitor = create_monitor()
+    result.scalar_one_or_none.return_value = monitor
+    session.execute.return_value = result
+    repository = MonitorRepository(session)
+
+    found_monitor = await repository.get_by_id(monitor.id)
+
+    assert found_monitor is monitor
+    session.execute.assert_awaited_once()

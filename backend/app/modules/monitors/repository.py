@@ -32,6 +32,12 @@ class MonitorRepository:
 
         return list(result.scalars().all())
 
+    async def get_by_id(self, monitor_id: UUID) -> Monitor | None:
+        statement = select(Monitor).where(Monitor.id == monitor_id)
+        result = await self.session.execute(statement)
+
+        return result.scalar_one_or_none()
+
     async def get_for_user(
         self,
         monitor_id: UUID,
