@@ -29,6 +29,10 @@ class CheckExecutionService:
             timeout_seconds=monitor.timeout_seconds,
             expected_status=monitor.expected_status,
         )
+        await self.session.refresh(
+            monitor,
+            with_for_update=True,
+        )
         monitor_check = MonitorCheck(
             monitor_id=monitor.id,
             success=result.success,

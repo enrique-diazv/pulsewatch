@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models.monitor import Monitor
+from app.database.models.monitor_check import MonitorCheck
 from app.database.models.user import User
 from app.database.session import get_database_session
 from app.main import app
@@ -70,6 +71,25 @@ def create_monitor(user_id: UUID) -> Monitor:
         next_check_at=timestamp,
         created_at=timestamp,
         updated_at=timestamp,
+    )
+
+
+def create_monitor_check(
+    monitor_id: UUID,
+    *,
+    check_id: int = 1,
+) -> MonitorCheck:
+    timestamp = datetime(2026, 8, 9, tzinfo=UTC)
+
+    return MonitorCheck(
+        id=check_id,
+        monitor_id=monitor_id,
+        checked_at=timestamp,
+        success=True,
+        status_code=200,
+        response_time_ms=125,
+        error_type=None,
+        error_message=None,
     )
 
 
@@ -369,3 +389,78 @@ def test_manual_check_enforces_cooldown(
     }
     assert response.headers["retry-after"] == "10"
     enqueue.assert_not_called()
+
+
+def test_list_monitor_checks_returns_latest_checks(
+    client: TestClient,
+    current_user: User,
+) -> None:
+    monitor = create_monitor(current_user.id)
+    checks = [
+        create_monitor_check(monitor.id, check_id=2),
+        create_monitor_check(monitor.id, check_id=1),
+    ]
+
+    with (
+        patch(
+            "app.api.v1.endpoints.monitors.MonitorService.get_for_user",
+            new_callable=AsyncMock,
+            return_value=monitor,
+        ) as get_for_user,
+        patch(
+            "app.api.v1.endpoints.monitors.MonitorCheckRepository.list_for_monitor",
+            new_callable=AsyncMock,
+            return_value=checks,
+        ) as list_for_monitor,
+    ):
+        response = client.get(
+            f"/api/v1/monitors/{monitor.id}/checks?limit=50",
+        )
+
+    assert response.status_code == 200
+    assert [item["id"] for item in response.json()] == [2, 1]
+    assert response.json()[0]["monitor_id"] == str(monitor.id)
+    assert response.json()[0]["response_time_ms"] == 125
+    get_for_user.assert_awaited_once_with(
+        monitor.id,
+        current_user.id,
+    )
+    list_for_monitor.assert_awaited_once_with(
+        monitor.id,
+        limit=50,
+    )
+
+
+def test_list_monitor_checks_hides_unowned_monitor(
+    client: TestClient,
+) -> None:
+    monitor_id = uuid4()
+
+    with (
+        patch(
+            "app.api.v1.endpoints.monitors.MonitorService.get_for_user",
+            new_callable=AsyncMock,
+            side_effect=MonitorNotFoundError,
+        ),
+        patch(
+            "app.api.v1.endpoints.monitors.MonitorCheckRepository.list_for_monitor",
+            new_callable=AsyncMock,
+        ) as list_for_monitor,
+    ):
+        response = client.get(
+            f"/api/v1/monitors/{monitor_id}/checks",
+        )
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Monitor not found"}
+    list_for_monitor.assert_not_awaited()
+
+
+def test_list_monitor_checks_rejects_invalid_limit(
+    client: TestClient,
+) -> None:
+    response = client.get(
+        f"/api/v1/monitors/{uuid4()}/checks?limit=501",
+    )
+
+    assert response.status_code == 422

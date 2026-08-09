@@ -26,11 +26,11 @@ def test_register_request_rejects_invalid_email() -> None:
         )
 
 
-def test_register_request_requires_at_least_fifteen_characters() -> None:
+def test_register_request_requires_at_least_six_characters() -> None:
     with pytest.raises(ValidationError):
         RegisterRequest(
             email="user@example.com",
-            password="too-short",
+            password="short",
         )
 
 

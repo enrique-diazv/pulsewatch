@@ -1,17 +1,19 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.database.models.monitor import Monitor
+from app.database.models.monitor_check import MonitorCheck
 from app.database.models.user import User
 from app.database.session import get_database_session
 from app.modules.auth.dependencies import get_current_user
 from app.modules.checks.queue import enqueue_monitor_check
 from app.modules.checks.rate_limit import reserve_manual_check_slot
-from app.modules.checks.schemas import CheckQueuedResponse
+from app.modules.checks.repository import MonitorCheckRepository
+from app.modules.checks.schemas import CheckQueuedResponse, MonitorCheckResponse
 from app.modules.monitors.exceptions import MonitorNotFoundError
 from app.modules.monitors.schemas import MonitorCreate, MonitorResponse, MonitorUpdate
 from app.modules.monitors.service import MonitorService
@@ -56,6 +58,34 @@ async def list_monitors(
 ) -> list[Monitor]:
     return await MonitorService(session).list_for_user(
         current_user.id,
+    )
+
+
+@router.get(
+    "/{monitor_id}/checks",
+    response_model=list[MonitorCheckResponse],
+    summary="List monitor checks",
+)
+async def list_monitor_checks(
+    monitor_id: UUID,
+    current_user: CurrentUser,
+    session: DatabaseSession,
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+) -> list[MonitorCheck]:
+    try:
+        await MonitorService(session).get_for_user(
+            monitor_id,
+            current_user.id,
+        )
+    except MonitorNotFoundError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(error),
+        ) from error
+
+    return await MonitorCheckRepository(session).list_for_monitor(
+        monitor_id,
+        limit=limit,
     )
 
 

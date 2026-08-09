@@ -64,7 +64,12 @@ async def test_execute_stores_successful_result() -> None:
         monitor_check,
     )
     session.commit.assert_awaited_once()
-    session.refresh.assert_awaited_once_with(monitor_check)
+    assert session.refresh.await_count == 2
+    session.refresh.assert_any_await(
+        monitor,
+        with_for_update=True,
+    )
+    session.refresh.assert_any_await(monitor_check)
 
 
 @pytest.mark.anyio
@@ -100,3 +105,9 @@ async def test_execute_stores_classified_failure() -> None:
         monitor_check,
     )
     session.commit.assert_awaited_once()
+    assert session.refresh.await_count == 2
+    session.refresh.assert_any_await(
+        monitor,
+        with_for_update=True,
+    )
+    session.refresh.assert_any_await(monitor_check)

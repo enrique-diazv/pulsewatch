@@ -27,6 +27,7 @@ class Settings(BaseSettings):
         "ERROR",
         "CRITICAL",
     ] = "INFO"
+    cors_allowed_origins: tuple[str, ...] = ("http://localhost:5173",)
     database_host: str = "127.0.0.1"
     database_port: int = 5432
     database_name: str = "pulsewatch"
