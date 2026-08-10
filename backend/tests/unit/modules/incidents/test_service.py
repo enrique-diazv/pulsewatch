@@ -11,8 +11,17 @@ from app.modules.incidents.enums import IncidentStatus
 from app.modules.incidents.repository import IncidentRepository
 from app.modules.incidents.service import IncidentDetectionService
 from app.modules.monitors.enums import MonitorStatus
+from app.modules.notifications.enums import NotificationType
+from app.modules.notifications.repository import (
+    NotificationRepository,
+)
 
 CHECKED_AT = datetime(2026, 8, 8, 22, 30, tzinfo=UTC)
+
+
+@pytest.fixture
+def notification_repository() -> AsyncMock:
+    return AsyncMock(spec=NotificationRepository)
 
 
 def create_monitor(
@@ -58,13 +67,21 @@ def create_check(
 
 
 @pytest.mark.anyio
-async def test_success_updates_monitor_without_incident() -> None:
+async def test_success_updates_monitor_without_incident(
+    notification_repository: AsyncMock,
+) -> None:
     repository = AsyncMock(spec=IncidentRepository)
-    service = IncidentDetectionService(repository)
+    service = IncidentDetectionService(
+        repository,
+        notification_repository,
+    )
     monitor = create_monitor(status=MonitorStatus.UNKNOWN)
     monitor_check = create_check(check_id=1, success=True)
 
-    incident = await service.process_check(monitor, monitor_check)
+    incident = await service.process_check(
+        monitor,
+        monitor_check,
+    )
 
     assert incident is None
     assert monitor.status is MonitorStatus.UP
@@ -73,13 +90,25 @@ async def test_success_updates_monitor_without_incident() -> None:
     assert monitor.last_checked_at == CHECKED_AT
     repository.add.assert_not_awaited()
     repository.get_open_for_update.assert_not_awaited()
+    notification_repository.add.assert_not_awaited()
 
 
 @pytest.mark.anyio
-async def test_failure_threshold_opens_incident() -> None:
+async def test_failure_threshold_opens_incident(
+    notification_repository: AsyncMock,
+) -> None:
     repository = AsyncMock(spec=IncidentRepository)
-    repository.add.side_effect = lambda incident: incident
-    service = IncidentDetectionService(repository)
+    incident_id = uuid4()
+
+    def add_incident(incident: Incident) -> Incident:
+        incident.id = incident_id
+        return incident
+
+    repository.add.side_effect = add_incident
+    service = IncidentDetectionService(
+        repository,
+        notification_repository,
+    )
     monitor = create_monitor(
         status=MonitorStatus.UP,
         consecutive_failures=2,
@@ -91,7 +120,10 @@ async def test_failure_threshold_opens_incident() -> None:
         error_message="Request timed out",
     )
 
-    incident = await service.process_check(monitor, monitor_check)
+    incident = await service.process_check(
+        monitor,
+        monitor_check,
+    )
 
     assert incident is repository.add.await_args.args[0]
     assert monitor.status is MonitorStatus.DOWN
@@ -102,30 +134,48 @@ async def test_failure_threshold_opens_incident() -> None:
     assert incident.failure_reason == "Request timed out"
     assert incident.initial_check_id == 42
 
+    notification_repository.add.assert_awaited_once()
+    notification = notification_repository.add.await_args.args[0]
+    assert notification.user_id == monitor.user_id
+    assert notification.incident_id == incident_id
+    assert notification.type is NotificationType.INCIDENT_OPENED
+
 
 @pytest.mark.anyio
-async def test_first_recovery_success_keeps_incident_open() -> None:
+async def test_first_recovery_success_keeps_incident_open(
+    notification_repository: AsyncMock,
+) -> None:
     repository = AsyncMock(spec=IncidentRepository)
-    service = IncidentDetectionService(repository)
+    service = IncidentDetectionService(
+        repository,
+        notification_repository,
+    )
     monitor = create_monitor(status=MonitorStatus.DOWN)
     monitor_check = create_check(check_id=84, success=True)
 
-    incident = await service.process_check(monitor, monitor_check)
+    incident = await service.process_check(
+        monitor,
+        monitor_check,
+    )
 
     assert incident is None
     assert monitor.status is MonitorStatus.DOWN
     assert monitor.consecutive_successes == 1
     repository.get_open_for_update.assert_not_awaited()
+    notification_repository.add.assert_not_awaited()
 
 
 @pytest.mark.anyio
-async def test_recovery_threshold_resolves_open_incident() -> None:
+async def test_recovery_threshold_resolves_open_incident(
+    notification_repository: AsyncMock,
+) -> None:
     repository = AsyncMock(spec=IncidentRepository)
     monitor = create_monitor(
         status=MonitorStatus.DOWN,
         consecutive_successes=1,
     )
     open_incident = Incident(
+        id=uuid4(),
         monitor_id=monitor.id,
         status=IncidentStatus.OPEN,
         started_at=CHECKED_AT,
@@ -133,10 +183,16 @@ async def test_recovery_threshold_resolves_open_incident() -> None:
         initial_check_id=42,
     )
     repository.get_open_for_update.return_value = open_incident
-    service = IncidentDetectionService(repository)
+    service = IncidentDetectionService(
+        repository,
+        notification_repository,
+    )
     monitor_check = create_check(check_id=99, success=True)
 
-    incident = await service.process_check(monitor, monitor_check)
+    incident = await service.process_check(
+        monitor,
+        monitor_check,
+    )
 
     assert incident is open_incident
     assert monitor.status is MonitorStatus.UP
@@ -144,3 +200,9 @@ async def test_recovery_threshold_resolves_open_incident() -> None:
     assert open_incident.status is IncidentStatus.RESOLVED
     assert open_incident.resolved_at == CHECKED_AT
     assert open_incident.recovery_check_id == 99
+
+    notification_repository.add.assert_awaited_once()
+    notification = notification_repository.add.await_args.args[0]
+    assert notification.user_id == monitor.user_id
+    assert notification.incident_id == open_incident.id
+    assert notification.type is NotificationType.INCIDENT_RESOLVED

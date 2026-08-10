@@ -4,7 +4,10 @@ from uuid import uuid4
 from redis import Redis
 from redis.exceptions import LockNotOwnedError
 
-from app.workers.locks import acquire_monitor_lock
+from app.workers.locks import (
+    acquire_monitor_lock,
+    acquire_notification_lock,
+)
 
 
 def test_acquire_monitor_lock_releases_owned_lock() -> None:
@@ -54,5 +57,26 @@ def test_acquire_monitor_lock_handles_expired_ownership() -> None:
 
     warning.assert_called_once_with(
         "monitor_lock_release_skipped",
-        extra={"monitor_id": str(monitor_id)},
+        extra={"resource_id": str(monitor_id)},
     )
+
+
+def test_acquire_notification_lock_uses_separate_key() -> None:
+    redis_client = MagicMock(spec=Redis)
+    lock = MagicMock()
+    lock.acquire.return_value = True
+    redis_client.lock.return_value = lock
+    notification_id = uuid4()
+
+    with acquire_notification_lock(
+        redis_client,
+        notification_id,
+    ) as acquired:
+        assert acquired is True
+
+    redis_client.lock.assert_called_once_with(
+        f"notification-lock:{notification_id}",
+        timeout=60,
+        blocking=False,
+    )
+    lock.release.assert_called_once()

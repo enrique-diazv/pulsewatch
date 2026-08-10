@@ -49,6 +49,33 @@ class Settings(BaseSettings):
         ge=1,
         le=1000,
     )
+    notification_dispatch_interval_seconds: int = Field(
+        default=15,
+        ge=5,
+        le=300,
+    )
+    notification_batch_size: int = Field(
+        default=100,
+        ge=1,
+        le=1000,
+    )
+    notification_max_attempts: int = Field(
+        default=3,
+        ge=1,
+        le=10,
+    )
+    email_delivery_mode: Literal["log", "smtp"] = "log"
+    email_from_address: str = "alerts@pulsewatch.local"
+    smtp_host: str = "127.0.0.1"
+    smtp_port: int = Field(
+        default=1025,
+        ge=1,
+        le=65535,
+    )
+    smtp_username: str | None = None
+    smtp_password: SecretStr | None = None
+    smtp_use_tls: bool = False
+    smtp_start_tls: bool = False
     jwt_secret_key: SecretStr = Field(min_length=32)
     access_token_expire_minutes: int = Field(
         default=15,

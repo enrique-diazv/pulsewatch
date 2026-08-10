@@ -11,6 +11,7 @@ def create_celery_app(settings: Settings | None = None) -> Celery:
         include=(
             "app.workers.monitor_tasks",
             "app.workers.scheduler_tasks",
+            "app.workers.notification_tasks",
         ),
     )
     application.conf.update(
@@ -25,6 +26,15 @@ def create_celery_app(settings: Settings | None = None) -> Celery:
         timezone="UTC",
         worker_prefetch_multiplier=1,
         beat_schedule={
+            "dispatch-pending-notifications": {
+                "task": (
+                    "app.workers.notification_tasks.dispatch_pending_notifications"
+                ),
+                "schedule": float(
+                    resolved_settings.notification_dispatch_interval_seconds
+                ),
+                "options": {"queue": "notifications"},
+            },
             "schedule-due-monitors": {
                 "task": ("app.workers.scheduler_tasks.schedule_due_monitors"),
                 "schedule": float(resolved_settings.scheduler_poll_interval_seconds),

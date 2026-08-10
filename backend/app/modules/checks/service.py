@@ -11,6 +11,9 @@ from app.modules.checks.repository import MonitorCheckRepository
 from app.modules.checks.schemas import MetricsRange, MonitorMetricsResponse
 from app.modules.incidents.repository import IncidentRepository
 from app.modules.incidents.service import IncidentDetectionService
+from app.modules.notifications.repository import (
+    NotificationRepository,
+)
 
 METRICS_RANGE_DURATIONS: dict[MetricsRange, timedelta] = {
     "24h": timedelta(hours=24),
@@ -35,7 +38,8 @@ class CheckExecutionService:
         self.engine = engine
         self.repository = repository or MonitorCheckRepository(session)
         self.incident_service = incident_service or IncidentDetectionService(
-            IncidentRepository(session)
+            IncidentRepository(session),
+            NotificationRepository(session),
         )
 
     async def execute(self, monitor: Monitor) -> MonitorCheck:

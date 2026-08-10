@@ -5,18 +5,25 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database.models.incident import Incident
 from app.database.models.monitor import Monitor
 from app.database.models.monitor_check import MonitorCheck
+from app.database.models.notification import Notification
 from app.modules.incidents.enums import IncidentStatus
 from app.modules.incidents.exceptions import IncidentNotFoundError
 from app.modules.incidents.repository import IncidentRepository
 from app.modules.monitors.state import evaluate_monitor_state
+from app.modules.notifications.enums import NotificationType
+from app.modules.notifications.repository import (
+    NotificationRepository,
+)
 
 
 class IncidentDetectionService:
     def __init__(
         self,
         repository: IncidentRepository,
+        notification_repository: NotificationRepository,
     ) -> None:
         self.repository = repository
+        self.notification_repository = notification_repository
 
     async def process_check(
         self,
@@ -48,7 +55,16 @@ class IncidentDetectionService:
                 ),
                 initial_check_id=monitor_check.id,
             )
-            return await self.repository.add(incident)
+            incident = await self.repository.add(incident)
+            await self.notification_repository.add(
+                Notification(
+                    user_id=monitor.user_id,
+                    incident_id=incident.id,
+                    type=NotificationType.INCIDENT_OPENED,
+                )
+            )
+
+            return incident
 
         if state_update.recovered:
             incident = await self.repository.get_open_for_update(
@@ -61,7 +77,13 @@ class IncidentDetectionService:
             incident.status = IncidentStatus.RESOLVED
             incident.resolved_at = monitor_check.checked_at
             incident.recovery_check_id = monitor_check.id
-
+            await self.notification_repository.add(
+                Notification(
+                    user_id=monitor.user_id,
+                    incident_id=incident.id,
+                    type=NotificationType.INCIDENT_RESOLVED,
+                )
+            )
             return incident
 
         return None
