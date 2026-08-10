@@ -87,6 +87,11 @@ class Settings(BaseSettings):
         ge=1,
         le=90,
     )
+    realtime_ticket_ttl_seconds: int = Field(
+        default=30,
+        ge=10,
+        le=120,
+    )
 
 
 @lru_cache

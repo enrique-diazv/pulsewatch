@@ -13,6 +13,7 @@ from app.database.models.monitor_check import MonitorCheck
 from app.modules.checks.engine import HttpCheckEngine
 from app.modules.checks.service import CheckExecutionService
 from app.modules.monitors.repository import MonitorRepository
+from app.modules.realtime.events import RealtimePublisher
 from app.workers.monitor_tasks import (
     check_monitor,
     execute_monitor_check,
@@ -35,12 +36,14 @@ def create_monitor(*, is_active: bool = True) -> Monitor:
 
 
 @pytest.mark.anyio
+@pytest.mark.anyio
 async def test_execute_monitor_check_runs_active_monitor() -> None:
     session = AsyncMock(spec=AsyncSession)
     client = MagicMock(spec=httpx2.AsyncClient)
     repository = AsyncMock(spec=MonitorRepository)
     engine = MagicMock(spec=HttpCheckEngine)
     service = AsyncMock(spec=CheckExecutionService)
+    realtime_publisher = AsyncMock(spec=RealtimePublisher)
     monitor = create_monitor()
     monitor_check = MonitorCheck(
         id=1,
@@ -70,6 +73,7 @@ async def test_execute_monitor_check_runs_active_monitor() -> None:
             monitor.id,
             session,
             client,
+            realtime_publisher,
         )
 
     assert result is monitor_check
@@ -78,6 +82,7 @@ async def test_execute_monitor_check_runs_active_monitor() -> None:
     service_class.assert_called_once_with(
         session=session,
         engine=engine,
+        realtime_publisher=realtime_publisher,
     )
     service.execute.assert_awaited_once_with(monitor)
 

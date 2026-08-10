@@ -35,6 +35,14 @@ export function clearAccessToken() {
   accessToken = null
 }
 
+export function buildWebSocketUrl(path: string): URL {
+  const url = new URL(`${apiBaseUrl}${path}`)
+
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
+
+  return url
+}
+
 function extractErrorMessage(payload: unknown) {
   if (
     typeof payload === 'object' &&

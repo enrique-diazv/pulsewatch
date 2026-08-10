@@ -31,6 +31,7 @@ SETTING_VARIABLES = (
     "SMTP_PASSWORD",
     "SMTP_USE_TLS",
     "SMTP_START_TLS",
+    "REALTIME_TICKET_TTL_SECONDS",
 )
 
 
@@ -77,6 +78,7 @@ def test_settings_use_default_values(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.smtp_password is None
     assert settings.smtp_use_tls is False
     assert settings.smtp_start_tls is False
+    assert settings.realtime_ticket_ttl_seconds == 30
 
 
 def test_settings_read_environment_variables(
@@ -131,6 +133,11 @@ def test_settings_read_environment_variables(
     monkeypatch.setenv("SMTP_PASSWORD", "smtp-password")
     monkeypatch.setenv("SMTP_USE_TLS", "true")
     monkeypatch.setenv("SMTP_START_TLS", "false")
+    monkeypatch.setenv(
+        "REALTIME_TICKET_TTL_SECONDS",
+        "45",
+    )
+
     settings = Settings(_env_file=None)
 
     assert settings.app_name == "PulseWatch Test API"
@@ -166,3 +173,4 @@ def test_settings_read_environment_variables(
     )
     assert settings.smtp_use_tls is True
     assert settings.smtp_start_tls is False
+    assert settings.realtime_ticket_ttl_seconds == 45

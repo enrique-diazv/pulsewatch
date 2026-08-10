@@ -4,15 +4,23 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.logging import get_logger
+from app.database.models.incident import Incident
 from app.database.models.monitor import Monitor
 from app.database.models.monitor_check import MonitorCheck
 from app.modules.checks.engine import HttpCheckEngine
 from app.modules.checks.repository import MonitorCheckRepository
 from app.modules.checks.schemas import MetricsRange, MonitorMetricsResponse
+from app.modules.incidents.enums import IncidentStatus
 from app.modules.incidents.repository import IncidentRepository
 from app.modules.incidents.service import IncidentDetectionService
 from app.modules.notifications.repository import (
     NotificationRepository,
+)
+from app.modules.realtime.events import (
+    RealtimeEvent,
+    RealtimeEventType,
+    RealtimePublisher,
 )
 
 METRICS_RANGE_DURATIONS: dict[MetricsRange, timedelta] = {
@@ -20,6 +28,7 @@ METRICS_RANGE_DURATIONS: dict[MetricsRange, timedelta] = {
     "7d": timedelta(days=7),
     "30d": timedelta(days=30),
 }
+logger = get_logger(__name__)
 
 
 def utc_now() -> datetime:
@@ -33,6 +42,7 @@ class CheckExecutionService:
         engine: HttpCheckEngine,
         repository: MonitorCheckRepository | None = None,
         incident_service: IncidentDetectionService | None = None,
+        realtime_publisher: RealtimePublisher | None = None,
     ) -> None:
         self.session = session
         self.engine = engine
@@ -41,6 +51,7 @@ class CheckExecutionService:
             IncidentRepository(session),
             NotificationRepository(session),
         )
+        self.realtime_publisher = realtime_publisher
 
     async def execute(self, monitor: Monitor) -> MonitorCheck:
         result = await self.engine.execute(
@@ -64,14 +75,71 @@ class CheckExecutionService:
         )
 
         await self.repository.add(monitor_check)
-        await self.incident_service.process_check(
+        incident = await self.incident_service.process_check(
             monitor,
             monitor_check,
         )
         await self.session.commit()
         await self.session.refresh(monitor_check)
 
+        await self._publish_events(
+            monitor,
+            monitor_check,
+            incident,
+        )
+
         return monitor_check
+
+    async def _publish_events(
+        self,
+        monitor: Monitor,
+        monitor_check: MonitorCheck,
+        incident: Incident | None,
+    ) -> None:
+        if self.realtime_publisher is None:
+            return
+
+        events = [
+            RealtimeEvent(
+                type=RealtimeEventType.MONITOR_UPDATED,
+                monitor_id=monitor.id,
+                monitor_status=monitor.status,
+                check_id=monitor_check.id,
+            )
+        ]
+
+        if incident is not None:
+            incident_event_type = (
+                RealtimeEventType.INCIDENT_RESOLVED
+                if incident.status == IncidentStatus.RESOLVED
+                else RealtimeEventType.INCIDENT_OPENED
+            )
+            events.append(
+                RealtimeEvent(
+                    type=incident_event_type,
+                    monitor_id=monitor.id,
+                    monitor_status=monitor.status,
+                    check_id=monitor_check.id,
+                    incident_id=incident.id,
+                )
+            )
+
+        for event in events:
+            try:
+                await self.realtime_publisher.publish(
+                    monitor.user_id,
+                    event,
+                )
+            except Exception:
+                logger.exception(
+                    "realtime_event_publish_failed",
+                    extra={
+                        "user_id": str(monitor.user_id),
+                        "monitor_id": str(monitor.id),
+                        "check_id": monitor_check.id,
+                        "realtime_event_type": event.type,
+                    },
+                )
 
 
 class MonitorMetricsService:

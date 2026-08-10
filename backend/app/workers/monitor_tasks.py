@@ -11,10 +11,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.logging import get_logger
 from app.database.models.monitor_check import MonitorCheck
 from app.database.session import async_session_factory
-from app.integrations.redis import create_redis_client
+from app.integrations.redis import create_async_redis_client, create_redis_client
 from app.modules.checks.engine import HttpCheckEngine
 from app.modules.checks.service import CheckExecutionService
 from app.modules.monitors.repository import MonitorRepository
+from app.modules.realtime.events import (
+    RealtimePublisher,
+    RedisRealtimePublisher,
+)
 from app.workers.celery_app import celery_app
 from app.workers.locks import acquire_monitor_lock
 
@@ -42,6 +46,7 @@ async def execute_monitor_check(
     monitor_id: UUID,
     session: AsyncSession,
     client: httpx2.AsyncClient,
+    realtime_publisher: RealtimePublisher | None = None,
 ) -> MonitorCheck | None:
     repository = MonitorRepository(session)
     monitor = await repository.get_by_id(monitor_id)
@@ -59,26 +64,35 @@ async def execute_monitor_check(
             extra={"monitor_id": str(monitor_id)},
         )
         return None
+
     await session.commit()
     engine = HttpCheckEngine(client)
     service = CheckExecutionService(
         session=session,
         engine=engine,
+        realtime_publisher=realtime_publisher,
     )
 
     return await service.execute(monitor)
 
 
 async def _execute_monitor_check_task(monitor_id: UUID) -> None:
-    async with (
-        async_session_factory() as session,
-        httpx2.AsyncClient() as client,
-    ):
-        monitor_check = await execute_monitor_check(
-            monitor_id,
-            session,
-            client,
-        )
+    realtime_redis = create_async_redis_client()
+
+    try:
+        async with (
+            async_session_factory() as session,
+            httpx2.AsyncClient() as client,
+        ):
+            realtime_publisher = RedisRealtimePublisher(realtime_redis)
+            monitor_check = await execute_monitor_check(
+                monitor_id,
+                session,
+                client,
+                realtime_publisher,
+            )
+    finally:
+        await realtime_redis.aclose()
 
     if monitor_check is not None:
         logger.info(
