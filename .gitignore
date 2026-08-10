@@ -28,6 +28,6 @@ test-results/
 .vscode/
 .idea/
 
-# Operating systems
-.DS_Store
-Thumbs.db
+# Local service runtime files
+/backend/celerybeat-schedule*
+/memurai-log.txt
