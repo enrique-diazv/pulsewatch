@@ -21,3 +21,24 @@ class MonitorCheckResponse(BaseModel):
     response_time_ms: int
     error_type: str | None
     error_message: str | None
+
+
+MetricsRange = Literal["24h", "7d", "30d"]
+
+
+class MonitorMetricsResponse(BaseModel):
+    range: MetricsRange
+    from_timestamp: datetime
+    to_timestamp: datetime
+    total_checks: int = Field(ge=0)
+    successful_checks: int = Field(ge=0)
+    failed_checks: int = Field(ge=0)
+    uptime_percentage: float | None = Field(
+        default=None,
+        ge=0,
+        le=100,
+    )
+    average_response_time_ms: float | None = Field(
+        default=None,
+        ge=0,
+    )

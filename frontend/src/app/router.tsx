@@ -3,6 +3,7 @@ import {
   createBrowserRouter,
 } from 'react-router-dom'
 
+import { IncidentDetailsPage } from '../pages/IncidentDetailsPage.tsx'
 import { IncidentsPage } from '../pages/IncidentsPage.tsx'
 import { CreateMonitorPage } from '../pages/CreateMonitorPage.tsx'
 import { ProtectedRoute } from '../components/auth/ProtectedRoute.tsx'
@@ -63,6 +64,10 @@ export const router = createBrowserRouter([
           {
             path: '/monitors/:monitorId',
             element: <MonitorDetailsPage />,
+          },
+          {
+            path: '/incidents/:incidentId',
+            element: <IncidentDetailsPage />,
           },
           {
             path: '/incidents',

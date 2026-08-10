@@ -48,19 +48,6 @@ export function MonitorHistoryPanel({
     )
   }
 
-  const successfulChecks = checks.filter(
-    (check) => check.success,
-  ).length
-  const uptime = (
-    (successfulChecks / checks.length) *
-    100
-  ).toFixed(2)
-  const averageResponseTime = Math.round(
-    checks.reduce(
-      (total, check) => total + check.response_time_ms,
-      0,
-    ) / checks.length,
-  )
   const chartData = [...checks]
     .reverse()
     .map((check) => ({
@@ -76,17 +63,6 @@ export function MonitorHistoryPanel({
           <h2>Check history</h2>
           <p>Latest {checks.length} recorded checks.</p>
         </div>
-
-        <dl className="history-summary">
-          <div>
-            <dt>Recent uptime</dt>
-            <dd>{uptime}%</dd>
-          </div>
-          <div>
-            <dt>Average response</dt>
-            <dd>{averageResponseTime} ms</dd>
-          </div>
-        </dl>
       </header>
 
       <div

@@ -13,7 +13,13 @@ from app.modules.auth.dependencies import get_current_user
 from app.modules.checks.queue import enqueue_monitor_check
 from app.modules.checks.rate_limit import reserve_manual_check_slot
 from app.modules.checks.repository import MonitorCheckRepository
-from app.modules.checks.schemas import CheckQueuedResponse, MonitorCheckResponse
+from app.modules.checks.schemas import (
+    CheckQueuedResponse,
+    MetricsRange,
+    MonitorCheckResponse,
+    MonitorMetricsResponse,
+)
+from app.modules.checks.service import MonitorMetricsService
 from app.modules.monitors.exceptions import MonitorNotFoundError
 from app.modules.monitors.schemas import MonitorCreate, MonitorResponse, MonitorUpdate
 from app.modules.monitors.service import MonitorService
@@ -86,6 +92,37 @@ async def list_monitor_checks(
     return await MonitorCheckRepository(session).list_for_monitor(
         monitor_id,
         limit=limit,
+    )
+
+
+@router.get(
+    "/{monitor_id}/metrics",
+    response_model=MonitorMetricsResponse,
+    summary="Get monitor metrics",
+)
+async def get_monitor_metrics(
+    monitor_id: UUID,
+    current_user: CurrentUser,
+    session: DatabaseSession,
+    metrics_range: Annotated[
+        MetricsRange,
+        Query(alias="range"),
+    ] = "24h",
+) -> MonitorMetricsResponse:
+    try:
+        await MonitorService(session).get_for_user(
+            monitor_id,
+            current_user.id,
+        )
+    except MonitorNotFoundError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(error),
+        ) from error
+
+    return await MonitorMetricsService(session).summarize(
+        monitor_id,
+        metrics_range,
     )
 
 

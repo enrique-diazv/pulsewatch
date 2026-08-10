@@ -5,6 +5,8 @@ import type {
   MonitorCheck,
   MonitorCreateInput,
   MonitorUpdateInput,
+  MetricsRange,
+  MonitorMetrics,
 } from './types.ts'
 
 export function listMonitors() {
@@ -83,6 +85,18 @@ export function listMonitorChecks(
 ) {
   return apiRequest<MonitorCheck[]>(
     `/monitors/${monitorId}/checks?limit=${limit}`,
+    {
+      authenticated: true,
+    },
+  )
+}
+
+export function getMonitorMetrics(
+  monitorId: string,
+  metricsRange: MetricsRange,
+) {
+  return apiRequest<MonitorMetrics>(
+    `/monitors/${monitorId}/metrics?range=${metricsRange}`,
     {
       authenticated: true,
     },

@@ -14,8 +14,10 @@ import {
     listMonitorChecks,
     deleteMonitor,
     updateMonitor,
+    getMonitorMetrics,
 } from './api.ts'
 import type {
+    MetricsRange,
     Monitor,
     MonitorUpdateInput,
 } from './types.ts'
@@ -30,6 +32,15 @@ export const monitorKeys = {
         'monitors',
         monitorId,
         'checks',
+    ] as const,
+    metrics: (
+        monitorId: string,
+        metricsRange: MetricsRange,
+    ) => [
+        'monitors',
+        monitorId,
+        'metrics',
+        metricsRange,
     ] as const,
 }
 
@@ -145,5 +156,21 @@ export function useDeleteMonitor() {
                 queryKey: monitorKeys.all,
             })
         },
+    })
+}
+
+export function useMonitorMetrics(
+    monitorId: string,
+    metricsRange: MetricsRange,
+) {
+    return useQuery({
+        queryKey: monitorKeys.metrics(
+            monitorId,
+            metricsRange,
+        ),
+        queryFn: () =>
+            getMonitorMetrics(monitorId, metricsRange),
+        enabled: monitorId.length > 0,
+        refetchInterval: 15_000,
     })
 }

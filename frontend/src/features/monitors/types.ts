@@ -54,3 +54,16 @@ export interface MonitorCheck {
   error_type: string | null
   error_message: string | null
 }
+
+export type MetricsRange = '24h' | '7d' | '30d'
+
+export interface MonitorMetrics {
+  range: MetricsRange
+  from_timestamp: string
+  to_timestamp: string
+  total_checks: number
+  successful_checks: number
+  failed_checks: number
+  uptime_percentage: number | null
+  average_response_time_ms: number | null
+}

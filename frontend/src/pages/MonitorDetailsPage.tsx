@@ -1,18 +1,25 @@
 import { lazy, Suspense, useState } from 'react'
 import {
     Link,
+    useNavigate,
     useParams,
 } from 'react-router-dom'
 
 import { MonitorStatusBadge } from '../components/common/MonitorStatusBadge.tsx'
 import {
-  useMonitor,
-  useMonitorChecks,
-  usePauseMonitor,
-  useQueueMonitorCheck,
-  useResumeMonitor,
+    useDeleteMonitor,
+    useMonitor,
+    useMonitorChecks,
+    usePauseMonitor,
+    useQueueMonitorCheck,
+    useResumeMonitor,
+    useMonitorMetrics,
 } from '../features/monitors/queries.ts'
 import { ApiError } from '../services/api/client.ts'
+import { ConfirmDialog } from '../components/common/ConfirmDialog.tsx'
+import { MonitorMetricsPanel } from '../components/monitors/MonitorMetricsPanel.tsx'
+import type { MetricsRange } from '../features/monitors/types.ts'
+
 interface Feedback {
     type: 'success' | 'error'
     message: string
@@ -47,13 +54,23 @@ function getActionError(error: unknown) {
 }
 
 export function MonitorDetailsPage() {
+    const navigate = useNavigate()
+    const [deleteDialogOpen, setDeleteDialogOpen] =
+        useState(false)
     const { monitorId = '' } = useParams()
     const [feedback, setFeedback] = useState<Feedback | null>(null)
     const monitorQuery = useMonitor(monitorId)
     const checkHistoryQuery = useMonitorChecks(monitorId)
+    const [metricsRange, setMetricsRange] =
+        useState<MetricsRange>('24h')
+    const metricsQuery = useMonitorMetrics(
+        monitorId,
+        metricsRange,
+    )
     const pauseMonitor = usePauseMonitor()
     const resumeMonitor = useResumeMonitor()
     const queueCheck = useQueueMonitorCheck()
+    const deleteMonitor = useDeleteMonitor()
 
     if (monitorQuery.isPending) {
         return <p aria-live="polite">Loading monitor...</p>
@@ -117,6 +134,20 @@ export function MonitorDetailsPage() {
         }
     }
 
+    async function removeMonitor() {
+        setFeedback(null)
+
+        try {
+            await deleteMonitor.mutateAsync(monitor.id)
+            navigate('/monitors', { replace: true })
+        } catch (error) {
+            setDeleteDialogOpen(false)
+            setFeedback({
+                type: 'error',
+                message: getActionError(error),
+            })
+        }
+    }
     return (
         <section aria-labelledby="monitor-title">
             <Link className="back-link" to="/monitors">
@@ -155,6 +186,14 @@ export function MonitorDetailsPage() {
                         type="button"
                     >
                         {queueCheck.isPending ? 'Queueing...' : 'Run check'}
+                    </button>
+                    <button
+                        className="button button--danger"
+                        disabled={deleteMonitor.isPending}
+                        onClick={() => setDeleteDialogOpen(true)}
+                        type="button"
+                    >
+                        Delete
                     </button>
                 </div>
             </header>
@@ -206,6 +245,21 @@ export function MonitorDetailsPage() {
                     <dd>{monitor.is_active ? 'Active' : 'Paused'}</dd>
                 </div>
             </dl>
+            {metricsQuery.isError ? (
+                <section className="history-panel" role="alert">
+                    <h2>Unable to load metrics</h2>
+                    <p>
+                        Performance metrics could not be retrieved.
+                    </p>
+                </section>
+            ) : (
+                <MonitorMetricsPanel
+                    metrics={metricsQuery.data}
+                    metricsRange={metricsRange}
+                    onRangeChange={setMetricsRange}
+                    pending={metricsQuery.isPending}
+                />
+            )}
             {checkHistoryQuery.isPending ? (
                 <section className="history-panel">
                     <p aria-live="polite">Loading check history...</p>
@@ -230,6 +284,18 @@ export function MonitorDetailsPage() {
                     <MonitorHistoryPanel checks={checkHistoryQuery.data} />
                 </Suspense>
             ) : null}
+            <ConfirmDialog
+                confirmLabel="Delete monitor"
+                description={
+                    `This permanently deletes "${monitor.name}", ` +
+                    'including its checks and incidents.'
+                }
+                onCancel={() => setDeleteDialogOpen(false)}
+                onConfirm={() => void removeMonitor()}
+                open={deleteDialogOpen}
+                pending={deleteMonitor.isPending}
+                title="Delete this monitor?"
+            />
         </section>
     )
 }

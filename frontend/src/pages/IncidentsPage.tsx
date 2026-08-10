@@ -1,4 +1,7 @@
-import { useSearchParams } from 'react-router-dom'
+import {
+  Link,
+  useSearchParams,
+} from 'react-router-dom'
 
 import { useIncidents } from '../features/incidents/queries.ts'
 import type { IncidentStatus } from '../features/incidents/types.ts'
@@ -130,7 +133,11 @@ export function IncidentsPage() {
             )
 
             return (
-              <article className="incident-card" key={incident.id}>
+              <Link
+                className="incident-card incident-card--link"
+                key={incident.id}
+                to={`/incidents/${incident.id}`}
+              >
                 <div className="incident-card__content">
                   <div className="incident-card__heading">
                     <span
@@ -160,7 +167,7 @@ export function IncidentsPage() {
                     <dd>{formatTimestamp(incident.resolved_at)}</dd>
                   </div>
                 </dl>
-              </article>
+              </Link>
             )
           })}
         </div>

@@ -13,6 +13,7 @@ from app.database.models.user import User
 from app.database.session import get_database_session
 from app.main import app
 from app.modules.auth.dependencies import get_current_user
+from app.modules.checks.schemas import MonitorMetricsResponse
 from app.modules.monitors.enums import HttpMethod, MonitorStatus
 from app.modules.monitors.exceptions import MonitorNotFoundError
 
@@ -461,6 +462,125 @@ def test_list_monitor_checks_rejects_invalid_limit(
 ) -> None:
     response = client.get(
         f"/api/v1/monitors/{uuid4()}/checks?limit=501",
+    )
+
+    assert response.status_code == 422
+
+
+def create_monitor_metrics(
+    metrics_range: str = "24h",
+) -> MonitorMetricsResponse:
+    return MonitorMetricsResponse(
+        range=metrics_range,
+        from_timestamp=datetime(2026, 8, 8, tzinfo=UTC),
+        to_timestamp=datetime(2026, 8, 9, tzinfo=UTC),
+        total_checks=100,
+        successful_checks=98,
+        failed_checks=2,
+        uptime_percentage=98.0,
+        average_response_time_ms=145.25,
+    )
+
+
+def test_get_monitor_metrics_uses_default_range(
+    client: TestClient,
+    current_user: User,
+) -> None:
+    monitor = create_monitor(current_user.id)
+    metrics = create_monitor_metrics()
+
+    with (
+        patch(
+            "app.api.v1.endpoints.monitors.MonitorService.get_for_user",
+            new_callable=AsyncMock,
+            return_value=monitor,
+        ) as get_for_user,
+        patch(
+            "app.api.v1.endpoints.monitors.MonitorMetricsService.summarize",
+            new_callable=AsyncMock,
+            return_value=metrics,
+        ) as summarize,
+    ):
+        response = client.get(
+            f"/api/v1/monitors/{monitor.id}/metrics",
+        )
+
+    assert response.status_code == 200
+    assert response.json()["range"] == "24h"
+    assert response.json()["total_checks"] == 100
+    assert response.json()["uptime_percentage"] == 98.0
+    assert response.json()["average_response_time_ms"] == 145.25
+    get_for_user.assert_awaited_once_with(
+        monitor.id,
+        current_user.id,
+    )
+    summarize.assert_awaited_once_with(
+        monitor.id,
+        "24h",
+    )
+
+
+def test_get_monitor_metrics_accepts_explicit_range(
+    client: TestClient,
+    current_user: User,
+) -> None:
+    monitor = create_monitor(current_user.id)
+    metrics = create_monitor_metrics("7d")
+
+    with (
+        patch(
+            "app.api.v1.endpoints.monitors.MonitorService.get_for_user",
+            new_callable=AsyncMock,
+            return_value=monitor,
+        ),
+        patch(
+            "app.api.v1.endpoints.monitors.MonitorMetricsService.summarize",
+            new_callable=AsyncMock,
+            return_value=metrics,
+        ) as summarize,
+    ):
+        response = client.get(
+            f"/api/v1/monitors/{monitor.id}/metrics?range=7d",
+        )
+
+    assert response.status_code == 200
+    assert response.json()["range"] == "7d"
+    summarize.assert_awaited_once_with(
+        monitor.id,
+        "7d",
+    )
+
+
+def test_get_monitor_metrics_hides_unowned_monitor(
+    client: TestClient,
+) -> None:
+    monitor_id = uuid4()
+
+    with (
+        patch(
+            "app.api.v1.endpoints.monitors.MonitorService.get_for_user",
+            new_callable=AsyncMock,
+            side_effect=MonitorNotFoundError,
+        ),
+        patch(
+            "app.api.v1.endpoints.monitors.MonitorMetricsService.summarize",
+            new_callable=AsyncMock,
+        ) as summarize,
+    ):
+        response = client.get(
+            f"/api/v1/monitors/{monitor_id}/metrics",
+        )
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Monitor not found"}
+    summarize.assert_not_awaited()
+
+
+def test_get_monitor_metrics_rejects_invalid_range(
+    client: TestClient,
+) -> None:
+    response = client.get(
+        f"/api/v1/monitors/{uuid4()}/metrics?range=1h",
     )
 
     assert response.status_code == 422
