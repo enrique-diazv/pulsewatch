@@ -2,11 +2,11 @@ import { apiRequest } from '../../services/api/client.ts'
 import type {
   CheckQueuedResponse,
   Monitor,
-  MonitorCheck,
   MonitorCreateInput,
   MonitorUpdateInput,
   MetricsRange,
   MonitorMetrics,
+  MonitorCheckPage,
 } from './types.ts'
 
 export function listMonitors() {
@@ -82,9 +82,18 @@ export function queueMonitorCheck(monitorId: string) {
 export function listMonitorChecks(
   monitorId: string,
   limit = 100,
+  cursor?: string,
 ) {
-  return apiRequest<MonitorCheck[]>(
-    `/monitors/${monitorId}/checks?limit=${limit}`,
+  const parameters = new URLSearchParams({
+    limit: String(limit),
+  })
+
+  if (cursor !== undefined) {
+    parameters.set('cursor', cursor)
+  }
+
+  return apiRequest<MonitorCheckPage>(
+    `/monitors/${monitorId}/checks?${parameters.toString()}`,
     {
       authenticated: true,
     },

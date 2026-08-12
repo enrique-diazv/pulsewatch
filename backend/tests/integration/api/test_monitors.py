@@ -13,6 +13,7 @@ from app.database.models.user import User
 from app.database.session import get_database_session
 from app.main import app
 from app.modules.auth.dependencies import get_current_user
+from app.modules.checks.repository import MonitorCheckPage
 from app.modules.checks.schemas import MonitorMetricsResponse
 from app.modules.monitors.enums import HttpMethod, MonitorStatus
 from app.modules.monitors.exceptions import MonitorNotFoundError
@@ -409,19 +410,29 @@ def test_list_monitor_checks_returns_latest_checks(
             return_value=monitor,
         ) as get_for_user,
         patch(
-            "app.api.v1.endpoints.monitors.MonitorCheckRepository.list_for_monitor",
+            "app.api.v1.endpoints.monitors."
+            "MonitorCheckRepository.list_page_for_monitor",
             new_callable=AsyncMock,
-            return_value=checks,
+            return_value=MonitorCheckPage(
+                items=checks,
+                next_cursor="next-page-cursor",
+            ),
         ) as list_for_monitor,
     ):
         response = client.get(
             f"/api/v1/monitors/{monitor.id}/checks?limit=50",
         )
 
+        payload = response.json()
+
     assert response.status_code == 200
-    assert [item["id"] for item in response.json()] == [2, 1]
-    assert response.json()[0]["monitor_id"] == str(monitor.id)
-    assert response.json()[0]["response_time_ms"] == 125
+    assert [item["id"] for item in payload["items"]] == [
+        2,
+        1,
+    ]
+    assert payload["items"][0]["monitor_id"] == str(monitor.id)
+    assert payload["items"][0]["response_time_ms"] == 125
+    assert payload["next_cursor"] == "next-page-cursor"
     get_for_user.assert_awaited_once_with(
         monitor.id,
         current_user.id,
@@ -429,6 +440,7 @@ def test_list_monitor_checks_returns_latest_checks(
     list_for_monitor.assert_awaited_once_with(
         monitor.id,
         limit=50,
+        cursor=None,
     )
 
 
@@ -444,7 +456,8 @@ def test_list_monitor_checks_hides_unowned_monitor(
             side_effect=MonitorNotFoundError,
         ),
         patch(
-            "app.api.v1.endpoints.monitors.MonitorCheckRepository.list_for_monitor",
+            "app.api.v1.endpoints.monitors."
+            "MonitorCheckRepository.list_page_for_monitor",
             new_callable=AsyncMock,
         ) as list_for_monitor,
     ):
@@ -646,3 +659,30 @@ def test_monitor_mutations_hide_unowned_monitor(
         "detail": "Monitor not found",
     }
     service_call.assert_awaited_once()
+
+
+def test_list_monitor_checks_rejects_invalid_cursor(
+    client: TestClient,
+) -> None:
+    monitor_id = uuid4()
+
+    with (
+        patch(
+            "app.api.v1.endpoints.monitors.MonitorService.get_for_user",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "app.api.v1.endpoints.monitors."
+            "MonitorCheckRepository.list_page_for_monitor",
+            new_callable=AsyncMock,
+        ) as list_page,
+    ):
+        response = client.get(
+            f"/api/v1/monitors/{monitor_id}/checks?cursor=not-base64!"
+        )
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": "Invalid monitor check cursor",
+    }
+    list_page.assert_not_awaited()

@@ -25,11 +25,18 @@ def test_monitor_check_model_has_expected_columns() -> None:
 
 
 def test_monitor_check_model_has_history_index() -> None:
-    index_names = {index.name for index in MonitorCheck.__table__.indexes}
+    indexes = list(MonitorCheck.__table__.indexes)
 
-    assert index_names == {
-        "ix_monitor_checks_monitor_id_checked_at",
-    }
+    assert len(indexes) == 1
+
+    history_index = indexes[0]
+
+    assert history_index.name == ("ix_monitor_checks_monitor_id_checked_at_id")
+    assert [str(expression) for expression in history_index.expressions] == [
+        "monitor_checks.monitor_id",
+        "monitor_checks.checked_at DESC",
+        "monitor_checks.id DESC",
+    ]
 
 
 def test_monitor_check_model_has_database_constraints() -> None:

@@ -23,6 +23,11 @@ class MonitorCheckResponse(BaseModel):
     error_message: str | None
 
 
+class MonitorCheckPageResponse(BaseModel):
+    items: list[MonitorCheckResponse]
+    next_cursor: str | None = None
+
+
 MetricsRange = Literal["24h", "7d", "30d"]
 
 

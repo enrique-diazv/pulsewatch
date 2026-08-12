@@ -12,6 +12,9 @@ import type { MonitorCheck } from '../../features/monitors/types.ts'
 
 interface MonitorHistoryPanelProps {
   checks: MonitorCheck[]
+  hasNextPage: boolean
+  loadingMore: boolean
+  onLoadMore: () => void
 }
 
 function formatTimestamp(value: string) {
@@ -30,6 +33,9 @@ function formatChartTimestamp(value: string) {
 
 export function MonitorHistoryPanel({
   checks,
+  hasNextPage,
+  loadingMore,
+  onLoadMore,
 }: MonitorHistoryPanelProps) {
   if (checks.length === 0) {
     return (
@@ -39,6 +45,7 @@ export function MonitorHistoryPanel({
             <h2>Check history</h2>
             <p>Response times and recent availability.</p>
           </div>
+
         </header>
 
         <div className="history-empty">
@@ -63,6 +70,18 @@ export function MonitorHistoryPanel({
           <h2>Check history</h2>
           <p>Latest {checks.length} recorded checks.</p>
         </div>
+        {hasNextPage ? (
+          <button
+            className="button button--secondary"
+            disabled={loadingMore}
+            onClick={onLoadMore}
+            type="button"
+          >
+            {loadingMore
+              ? 'Loading...'
+              : 'Load older checks'}
+          </button>
+        ) : null}
       </header>
 
       <div

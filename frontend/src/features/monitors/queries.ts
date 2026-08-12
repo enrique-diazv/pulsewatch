@@ -2,6 +2,7 @@ import {
     useMutation,
     useQuery,
     useQueryClient,
+    useInfiniteQuery,
 } from '@tanstack/react-query'
 
 import {
@@ -113,16 +114,23 @@ export function useQueueMonitorCheck() {
 
 export function useMonitorChecks(
     monitorId: string,
-    limit = 100,
+    limit = 50,
 ) {
-    return useQuery({
+    return useInfiniteQuery({
         queryKey: monitorKeys.checks(monitorId),
-        queryFn: () => listMonitorChecks(monitorId, limit),
+        queryFn: ({ pageParam }) =>
+            listMonitorChecks(
+                monitorId,
+                limit,
+                pageParam,
+            ),
+        initialPageParam: undefined as string | undefined,
+        getNextPageParam: (lastPage) =>
+            lastPage.next_cursor ?? undefined,
         enabled: monitorId.length > 0,
         refetchInterval: 15_000,
     })
 }
-
 interface UpdateMonitorVariables {
     monitorId: string
     input: MonitorUpdateInput

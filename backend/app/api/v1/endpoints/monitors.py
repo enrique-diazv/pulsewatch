@@ -6,22 +6,29 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.database.models.monitor import Monitor
-from app.database.models.monitor_check import MonitorCheck
 from app.database.models.user import User
 from app.database.session import get_database_session
 from app.modules.auth.dependencies import get_current_user
+from app.modules.checks.cursors import (
+    InvalidCheckCursorError,
+    decode_check_cursor,
+)
 from app.modules.checks.queue import enqueue_monitor_check
 from app.modules.checks.rate_limit import reserve_manual_check_slot
 from app.modules.checks.repository import MonitorCheckRepository
 from app.modules.checks.schemas import (
     CheckQueuedResponse,
     MetricsRange,
-    MonitorCheckResponse,
+    MonitorCheckPageResponse,
     MonitorMetricsResponse,
 )
 from app.modules.checks.service import MonitorMetricsService
 from app.modules.monitors.exceptions import MonitorNotFoundError
-from app.modules.monitors.schemas import MonitorCreate, MonitorResponse, MonitorUpdate
+from app.modules.monitors.schemas import (
+    MonitorCreate,
+    MonitorResponse,
+    MonitorUpdate,
+)
 from app.modules.monitors.service import MonitorService
 
 router = APIRouter(prefix="/monitors", tags=["monitors"])
@@ -69,7 +76,7 @@ async def list_monitors(
 
 @router.get(
     "/{monitor_id}/checks",
-    response_model=list[MonitorCheckResponse],
+    response_model=MonitorCheckPageResponse,
     summary="List monitor checks",
 )
 async def list_monitor_checks(
@@ -77,7 +84,11 @@ async def list_monitor_checks(
     current_user: CurrentUser,
     session: DatabaseSession,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
-) -> list[MonitorCheck]:
+    cursor: Annotated[
+        str | None,
+        Query(min_length=1),
+    ] = None,
+) -> MonitorCheckPageResponse:
     try:
         await MonitorService(session).get_for_user(
             monitor_id,
@@ -89,9 +100,23 @@ async def list_monitor_checks(
             detail=str(error),
         ) from error
 
-    return await MonitorCheckRepository(session).list_for_monitor(
+    try:
+        decoded_cursor = decode_check_cursor(cursor) if cursor is not None else None
+    except InvalidCheckCursorError as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(error),
+        ) from error
+
+    page = await MonitorCheckRepository(session).list_page_for_monitor(
         monitor_id,
         limit=limit,
+        cursor=decoded_cursor,
+    )
+
+    return MonitorCheckPageResponse(
+        items=page.items,
+        next_cursor=page.next_cursor,
     )
 
 

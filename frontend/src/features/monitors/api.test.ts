@@ -35,6 +35,20 @@ beforeEach(() => {
 })
 
 describe('monitor API reads and actions', () => {
+    it('lists checks from a cursor', async () => {
+        await listMonitorChecks(
+            monitorId,
+            50,
+            'next-page-cursor',
+        )
+
+        expect(mockedApiRequest).toHaveBeenCalledWith(
+            `/monitors/${monitorId}/checks?limit=50&cursor=next-page-cursor`,
+            {
+                authenticated: true,
+            },
+        )
+    })
     it.each([
         {
             name: 'lists monitors',

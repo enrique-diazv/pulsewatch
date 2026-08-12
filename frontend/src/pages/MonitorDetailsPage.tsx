@@ -61,6 +61,10 @@ export function MonitorDetailsPage() {
     const [feedback, setFeedback] = useState<Feedback | null>(null)
     const monitorQuery = useMonitor(monitorId)
     const checkHistoryQuery = useMonitorChecks(monitorId)
+    const checks =
+        checkHistoryQuery.data?.pages.flatMap(
+            (page) => page.items,
+        ) ?? []
     const [metricsRange, setMetricsRange] =
         useState<MetricsRange>('24h')
     const metricsQuery = useMonitorMetrics(
@@ -281,7 +285,18 @@ export function MonitorDetailsPage() {
                         </section>
                     }
                 >
-                    <MonitorHistoryPanel checks={checkHistoryQuery.data} />
+                    <MonitorHistoryPanel
+                        checks={checks}
+                        hasNextPage={
+                            checkHistoryQuery.hasNextPage
+                        }
+                        loadingMore={
+                            checkHistoryQuery.isFetchingNextPage
+                        }
+                        onLoadMore={() => {
+                            void checkHistoryQuery.fetchNextPage()
+                        }}
+                    />
                 </Suspense>
             ) : null}
             <ConfirmDialog

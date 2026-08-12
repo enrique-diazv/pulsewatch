@@ -2,10 +2,14 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models.monitor_check import MonitorCheck
+from app.modules.checks.cursors import (
+    CheckCursor,
+    encode_check_cursor,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -13,6 +17,12 @@ class MonitorCheckMetricsSummary:
     total_checks: int
     successful_checks: int
     average_response_time_ms: float | None
+
+
+@dataclass(frozen=True, slots=True)
+class MonitorCheckPage:
+    items: list[MonitorCheck]
+    next_cursor: str | None
 
 
 class MonitorCheckRepository:
@@ -43,6 +53,47 @@ class MonitorCheckRepository:
         result = await self.session.execute(statement)
 
         return list(result.scalars().all())
+
+    async def list_page_for_monitor(
+        self,
+        monitor_id: UUID,
+        *,
+        limit: int,
+        cursor: CheckCursor | None = None,
+    ) -> MonitorCheckPage:
+        statement = select(MonitorCheck).where(MonitorCheck.monitor_id == monitor_id)
+
+        if cursor is not None:
+            statement = statement.where(
+                or_(
+                    MonitorCheck.checked_at < cursor.checked_at,
+                    and_(
+                        MonitorCheck.checked_at == cursor.checked_at,
+                        MonitorCheck.id < cursor.check_id,
+                    ),
+                )
+            )
+
+        statement = statement.order_by(
+            MonitorCheck.checked_at.desc(),
+            MonitorCheck.id.desc(),
+        ).limit(limit + 1)
+        result = await self.session.execute(statement)
+        checks = list(result.scalars().all())
+        items = checks[:limit]
+        next_cursor = None
+
+        if len(checks) > limit and items:
+            last_item = items[-1]
+            next_cursor = encode_check_cursor(
+                last_item.checked_at,
+                last_item.id,
+            )
+
+        return MonitorCheckPage(
+            items=items,
+            next_cursor=next_cursor,
+        )
 
     async def summarize_for_monitor(
         self,

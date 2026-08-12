@@ -70,7 +70,8 @@ class MonitorCheck(Base):
 
 
 Index(
-    "ix_monitor_checks_monitor_id_checked_at",
+    "ix_monitor_checks_monitor_id_checked_at_id",
     MonitorCheck.monitor_id,
     MonitorCheck.checked_at.desc(),
+    MonitorCheck.id.desc(),
 )

@@ -55,6 +55,11 @@ export interface MonitorCheck {
   error_message: string | null
 }
 
+export interface MonitorCheckPage {
+    items: MonitorCheck[]
+    next_cursor: string | null
+}
+
 export type MetricsRange = '24h' | '7d' | '30d'
 
 export interface MonitorMetrics {
