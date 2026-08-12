@@ -1,3 +1,5 @@
+from asyncio import to_thread
+
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,10 +33,15 @@ class AuthService:
         if existing_user is not None:
             raise EmailAlreadyRegisteredError
 
+        password_hash = await to_thread(
+            hash_password,
+            request.password,
+        )
+
         try:
             user = await self.repository.create(
                 email=normalized_email,
-                password_hash=hash_password(request.password),
+                password_hash=password_hash,
             )
             await self.session.commit()
         except IntegrityError as error:
@@ -52,7 +59,8 @@ class AuthService:
         candidate_hash = (
             user.password_hash if user is not None else _DUMMY_PASSWORD_HASH
         )
-        password_is_valid = verify_password(
+        password_is_valid = await to_thread(
+            verify_password,
             request.password,
             candidate_hash,
         )

@@ -31,3 +31,5 @@ test-results/
 # Local service runtime files
 /backend/celerybeat-schedule*
 /memurai-log.txt
+
+/load-tests/results/*.json
