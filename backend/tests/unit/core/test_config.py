@@ -6,6 +6,7 @@ SETTING_VARIABLES = (
     "APP_NAME",
     "APP_VERSION",
     "ENVIRONMENT",
+    "DASHBOARD_CACHE_TTL_SECONDS",
     "DEBUG",
     "LOG_LEVEL",
     "DATABASE_HOST",
@@ -79,6 +80,7 @@ def test_settings_use_default_values(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.smtp_use_tls is False
     assert settings.smtp_start_tls is False
     assert settings.realtime_ticket_ttl_seconds == 30
+    assert settings.dashboard_cache_ttl_seconds == 30
 
 
 def test_settings_read_environment_variables(
@@ -137,7 +139,10 @@ def test_settings_read_environment_variables(
         "REALTIME_TICKET_TTL_SECONDS",
         "45",
     )
-
+    monkeypatch.setenv(
+        "DASHBOARD_CACHE_TTL_SECONDS",
+        "45",
+    )
     settings = Settings(_env_file=None)
 
     assert settings.app_name == "PulseWatch Test API"
@@ -174,3 +179,4 @@ def test_settings_read_environment_variables(
     assert settings.smtp_use_tls is True
     assert settings.smtp_start_tls is False
     assert settings.realtime_ticket_ttl_seconds == 45
+    assert settings.dashboard_cache_ttl_seconds == 45

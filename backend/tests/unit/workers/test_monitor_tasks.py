@@ -7,6 +7,7 @@ from uuid import uuid4
 import httpx2
 import pytest
 from redis import Redis
+from redis.asyncio import Redis as AsyncRedis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models.monitor import Monitor
@@ -46,6 +47,7 @@ async def test_execute_monitor_check_runs_active_monitor() -> None:
     engine = MagicMock(spec=HttpCheckEngine)
     service = AsyncMock(spec=CheckExecutionService)
     realtime_publisher = AsyncMock(spec=RealtimePublisher)
+    dashboard_redis = MagicMock(spec=AsyncRedis)
     monitor = create_monitor()
     monitor_check = MonitorCheck(
         id=1,
@@ -58,6 +60,10 @@ async def test_execute_monitor_check_runs_active_monitor() -> None:
     service.execute.return_value = monitor_check
 
     with (
+        patch(
+            "app.workers.monitor_tasks.invalidate_dashboard_cache",
+            new_callable=AsyncMock,
+        ) as invalidate_cache,
         patch(
             "app.workers.monitor_tasks.MonitorRepository",
             return_value=repository,
@@ -76,6 +82,7 @@ async def test_execute_monitor_check_runs_active_monitor() -> None:
             session,
             client,
             realtime_publisher,
+            dashboard_redis,
         )
 
     assert result is monitor_check
@@ -87,6 +94,10 @@ async def test_execute_monitor_check_runs_active_monitor() -> None:
         realtime_publisher=realtime_publisher,
     )
     service.execute.assert_awaited_once_with(monitor)
+    invalidate_cache.assert_awaited_once_with(
+        dashboard_redis,
+        monitor.user_id,
+    )
 
 
 @pytest.mark.anyio
@@ -209,6 +220,7 @@ async def test_monitor_task_connects_realtime_and_logs_result() -> None:
         session,
         client,
         realtime_publisher,
+        realtime_redis,
     )
     realtime_redis.aclose.assert_awaited_once()
     logger.info.assert_called_once_with(

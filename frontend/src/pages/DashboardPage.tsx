@@ -1,18 +1,18 @@
 import { Link } from 'react-router-dom'
 
 import { MonitorStatusBadge } from '../components/common/MonitorStatusBadge.tsx'
-import { useIncidents } from '../features/incidents/queries.ts'
 import { useMonitors } from '../features/monitors/queries.ts'
+import { useDashboardSummary } from '../features/dashboard/queries.ts'
 
 export function DashboardPage() {
   const monitorsQuery = useMonitors()
-  const incidentsQuery = useIncidents('OPEN')
+  const summaryQuery = useDashboardSummary()
 
-  if (monitorsQuery.isPending || incidentsQuery.isPending) {
-    return <p aria-live="polite">Loading dashboard…</p>
+  if (monitorsQuery.isPending || summaryQuery.isPending) {
+    return <p aria-live="polite">Loading dashboard...</p>
   }
 
-  if (monitorsQuery.isError || incidentsQuery.isError) {
+  if (monitorsQuery.isError || summaryQuery.isError) {
     return (
       <section className="error-state" role="alert">
         <h1>Unable to load dashboard</h1>
@@ -22,16 +22,7 @@ export function DashboardPage() {
   }
 
   const monitors = monitorsQuery.data
-  const openIncidents = incidentsQuery.data
-  const operationalCount = monitors.filter(
-    (monitor) => monitor.status === 'UP',
-  ).length
-  const downCount = monitors.filter(
-    (monitor) => monitor.status === 'DOWN',
-  ).length
-  const degradedCount = monitors.filter(
-    (monitor) => monitor.status === 'DEGRADED',
-  ).length
+  const summary = summaryQuery.data
 
   return (
     <section aria-labelledby="dashboard-title">
@@ -55,32 +46,51 @@ export function DashboardPage() {
       <div className="metric-grid">
         <article className="metric-card">
           <p>Total monitors</p>
-          <strong>{monitors.length}</strong>
+          <strong>{summary.total_monitors}</strong>
           <span>Configured endpoints</span>
         </article>
 
         <article className="metric-card metric-card--success">
           <p>Operational</p>
-          <strong>{operationalCount}</strong>
+          <strong>{summary.operational_monitors}</strong>
           <span>Passing checks</span>
         </article>
 
         <article className="metric-card metric-card--danger">
           <p>Down</p>
-          <strong>{downCount}</strong>
+          <strong>{summary.down_monitors}</strong>
           <span>Failure threshold reached</span>
         </article>
 
         <article className="metric-card metric-card--warning">
           <p>Degraded</p>
-          <strong>{degradedCount}</strong>
+          <strong>{summary.degraded_monitors}</strong>
           <span>Performance affected</span>
         </article>
 
         <article className="metric-card metric-card--danger">
           <p>Active incidents</p>
-          <strong>{openIncidents.length}</strong>
+          <strong>{summary.active_incidents}</strong>
           <span>Require attention</span>
+        </article>
+        <article className="metric-card metric-card--success">
+          <p>Overall uptime</p>
+          <strong>
+            {summary.overall_uptime_percentage === null
+              ? '—'
+              : `${summary.overall_uptime_percentage.toFixed(2)}%`}
+          </strong>
+          <span>Across recorded checks</span>
+        </article>
+
+        <article className="metric-card">
+          <p>Average response</p>
+          <strong>
+            {summary.average_response_time_ms === null
+              ? '—'
+              : `${summary.average_response_time_ms.toFixed(0)} ms`}
+          </strong>
+          <span>Across recorded checks</span>
         </article>
       </div>
 

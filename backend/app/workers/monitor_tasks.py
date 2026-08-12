@@ -6,6 +6,7 @@ from typing import Any
 from uuid import UUID
 
 import httpx2
+from redis.asyncio import Redis as AsyncRedis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
@@ -14,6 +15,9 @@ from app.database.session import async_session_factory
 from app.integrations.redis import create_async_redis_client, create_redis_client
 from app.modules.checks.engine import HttpCheckEngine
 from app.modules.checks.service import CheckExecutionService
+from app.modules.dashboard.service import (
+    invalidate_dashboard_cache,
+)
 from app.modules.monitors.repository import MonitorRepository
 from app.modules.realtime.events import (
     RealtimePublisher,
@@ -47,6 +51,7 @@ async def execute_monitor_check(
     session: AsyncSession,
     client: httpx2.AsyncClient,
     realtime_publisher: RealtimePublisher | None = None,
+    dashboard_redis: AsyncRedis | None = None,
 ) -> MonitorCheck | None:
     repository = MonitorRepository(session)
     monitor = await repository.get_by_id(monitor_id)
@@ -73,7 +78,15 @@ async def execute_monitor_check(
         realtime_publisher=realtime_publisher,
     )
 
-    return await service.execute(monitor)
+    monitor_check = await service.execute(monitor)
+
+    if dashboard_redis is not None:
+        await invalidate_dashboard_cache(
+            dashboard_redis,
+            monitor.user_id,
+        )
+
+    return monitor_check
 
 
 async def _execute_monitor_check_task(monitor_id: UUID) -> None:
@@ -90,6 +103,7 @@ async def _execute_monitor_check_task(monitor_id: UUID) -> None:
                 session,
                 client,
                 realtime_publisher,
+                realtime_redis,
             )
     finally:
         await realtime_redis.aclose()

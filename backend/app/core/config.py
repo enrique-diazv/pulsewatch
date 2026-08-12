@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     database_user: str = "pulsewatch_app"
     database_password: SecretStr
     redis_url: RedisDsn = RedisDsn("redis://127.0.0.1:6379/0")
+    dashboard_cache_ttl_seconds: int = Field(
+        default=30,
+        ge=5,
+        le=300,
+    )
     manual_check_cooldown_seconds: int = Field(
         default=10,
         ge=5,

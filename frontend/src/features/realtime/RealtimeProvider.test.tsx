@@ -135,7 +135,26 @@ describe('RealtimeProvider', () => {
                 }),
             )
         })
-
+        await waitFor(() => {
+            expect(invalidateQueries).toHaveBeenCalledWith({
+                queryKey: ['dashboard', 'summary'],
+                exact: true,
+            })
+            expect(invalidateQueries).toHaveBeenCalledWith({
+                queryKey: ['monitors'],
+                exact: true,
+            })
+            expect(invalidateQueries).toHaveBeenCalledWith({
+                queryKey: [
+                    'monitors',
+                    'monitor-123',
+                    'checks',
+                ],
+            })
+            expect(invalidateQueries).toHaveBeenCalledWith({
+                queryKey: ['incidents'],
+            })
+        })
         await waitFor(() => {
             expect(invalidateQueries).toHaveBeenCalledWith({
                 queryKey: ['monitors'],

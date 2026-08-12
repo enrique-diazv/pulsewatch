@@ -13,6 +13,7 @@ import type {
     RealtimeEvent,
     RealtimeEventType,
 } from './types.ts'
+import { dashboardKeys } from '../dashboard/queries.ts'
 
 const INITIAL_RECONNECT_DELAY_MS = 1_000
 const MAX_RECONNECT_DELAY_MS = 30_000
@@ -72,6 +73,10 @@ export function RealtimeProvider({
         function invalidateQueries(event: RealtimeEvent) {
             const invalidations = [
                 queryClient.invalidateQueries({
+                    queryKey: dashboardKeys.summary,
+                    exact: true,
+                }),
+                queryClient.invalidateQueries({
                     queryKey: monitorKeys.all,
                     exact: true,
                 }),
@@ -113,7 +118,7 @@ export function RealtimeProvider({
 
             const delay = Math.min(
                 INITIAL_RECONNECT_DELAY_MS *
-                    2 ** reconnectAttempt.current,
+                2 ** reconnectAttempt.current,
                 MAX_RECONNECT_DELAY_MS,
             )
             reconnectAttempt.current += 1
