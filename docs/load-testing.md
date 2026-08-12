@@ -1,6 +1,6 @@
 # PulseWatch load-testing report
 
-Status: local engineering baseline  
+Status: local engineering baseline
 Test date: August 12, 2026
 
 ## Purpose
