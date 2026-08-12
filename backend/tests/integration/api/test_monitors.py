@@ -584,3 +584,65 @@ def test_get_monitor_metrics_rejects_invalid_range(
     )
 
     assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    (
+        "http_method",
+        "path_suffix",
+        "service_method",
+        "payload",
+    ),
+    [
+        (
+            "PATCH",
+            "",
+            "update",
+            {"name": "Updated monitor"},
+        ),
+        (
+            "DELETE",
+            "",
+            "delete",
+            None,
+        ),
+        (
+            "POST",
+            "/pause",
+            "pause",
+            None,
+        ),
+        (
+            "POST",
+            "/resume",
+            "resume",
+            None,
+        ),
+    ],
+)
+def test_monitor_mutations_hide_unowned_monitor(
+    client: TestClient,
+    http_method: str,
+    path_suffix: str,
+    service_method: str,
+    payload: dict[str, str] | None,
+) -> None:
+    monitor_id = uuid4()
+    request_options = {"json": payload} if payload is not None else {}
+
+    with patch(
+        (f"app.api.v1.endpoints.monitors.MonitorService.{service_method}"),
+        new_callable=AsyncMock,
+        side_effect=MonitorNotFoundError,
+    ) as service_call:
+        response = client.request(
+            http_method,
+            f"/api/v1/monitors/{monitor_id}{path_suffix}",
+            **request_options,
+        )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Monitor not found",
+    }
+    service_call.assert_awaited_once()

@@ -25,6 +25,19 @@ select = [
     "SIM",
     "UP",
 ]
+[tool.coverage.run]
+branch = true
+source = ["app"]
+
+[tool.coverage.report]
+fail_under = 90
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+]
+show_missing = true
+skip_covered = true
 
 [tool.ruff.format]
 indent-style = "space"

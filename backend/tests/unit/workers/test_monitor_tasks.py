@@ -1,3 +1,4 @@
+import asyncio
 from datetime import UTC, datetime
 from inspect import iscoroutine
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -15,7 +16,9 @@ from app.modules.checks.service import CheckExecutionService
 from app.modules.monitors.repository import MonitorRepository
 from app.modules.realtime.events import RealtimePublisher
 from app.workers.monitor_tasks import (
+    _execute_monitor_check_task,
     check_monitor,
+    create_selector_event_loop,
     execute_monitor_check,
     run_worker_coroutine,
 )
@@ -35,7 +38,6 @@ def create_monitor(*, is_active: bool = True) -> Monitor:
     )
 
 
-@pytest.mark.anyio
 @pytest.mark.anyio
 async def test_execute_monitor_check_runs_active_monitor() -> None:
     session = AsyncMock(spec=AsyncSession)
@@ -139,6 +141,97 @@ async def test_execute_monitor_check_skips_inactive_monitor() -> None:
 
     assert result is None
     service_class.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_monitor_task_connects_realtime_and_logs_result() -> None:
+    monitor_id = uuid4()
+    session = AsyncMock(spec=AsyncSession)
+    client = MagicMock(spec=httpx2.AsyncClient)
+    realtime_redis = MagicMock()
+    realtime_redis.aclose = AsyncMock()
+    realtime_publisher = MagicMock()
+    monitor_check = MonitorCheck(
+        id=42,
+        monitor_id=monitor_id,
+        success=True,
+        status_code=200,
+        response_time_ms=125,
+    )
+
+    session_context = MagicMock()
+    session_context.__aenter__ = AsyncMock(
+        return_value=session,
+    )
+    session_context.__aexit__ = AsyncMock(
+        return_value=None,
+    )
+
+    client_context = MagicMock()
+    client_context.__aenter__ = AsyncMock(
+        return_value=client,
+    )
+    client_context.__aexit__ = AsyncMock(
+        return_value=None,
+    )
+
+    with (
+        patch(
+            "app.workers.monitor_tasks.create_async_redis_client",
+            return_value=realtime_redis,
+        ),
+        patch(
+            "app.workers.monitor_tasks.async_session_factory",
+            return_value=session_context,
+        ),
+        patch(
+            "app.workers.monitor_tasks.httpx2.AsyncClient",
+            return_value=client_context,
+        ),
+        patch(
+            "app.workers.monitor_tasks.RedisRealtimePublisher",
+            return_value=realtime_publisher,
+        ) as publisher_class,
+        patch(
+            "app.workers.monitor_tasks.execute_monitor_check",
+            new_callable=AsyncMock,
+            return_value=monitor_check,
+        ) as execute,
+        patch(
+            "app.workers.monitor_tasks.logger",
+        ) as logger,
+    ):
+        await _execute_monitor_check_task(monitor_id)
+
+    publisher_class.assert_called_once_with(realtime_redis)
+    execute.assert_awaited_once_with(
+        monitor_id,
+        session,
+        client,
+        realtime_publisher,
+    )
+    realtime_redis.aclose.assert_awaited_once()
+    logger.info.assert_called_once_with(
+        "monitor_check_completed",
+        extra={
+            "monitor_id": str(monitor_id),
+            "check_id": 42,
+            "success": True,
+            "response_time_ms": 125,
+        },
+    )
+
+
+def test_create_selector_event_loop_returns_selector_loop() -> None:
+    event_loop = create_selector_event_loop()
+
+    try:
+        assert isinstance(
+            event_loop,
+            asyncio.SelectorEventLoop,
+        )
+    finally:
+        event_loop.close()
 
 
 def test_check_monitor_skips_busy_lock() -> None:
