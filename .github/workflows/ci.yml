@@ -166,3 +166,27 @@ jobs:
       - name: Run end-to-end tests
         working-directory: frontend
         run: npm run test:e2e
+
+  backend-image:
+    name: Backend container
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Build backend image
+        run: >
+          docker build
+          --file backend/Dockerfile
+          --tag pulsewatch-backend:ci
+          backend
+
+      - name: Inspect image runtime user
+        run: >
+          test
+          "$(docker image inspect
+          pulsewatch-backend:ci
+          --format '{{.Config.User}}')"
+          = "pulsewatch"
