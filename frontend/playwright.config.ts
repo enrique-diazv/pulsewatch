@@ -3,6 +3,16 @@ import {
     devices,
 } from '@playwright/test'
 
+const pythonExecutable =
+    process.platform === 'win32'
+        ? '.\\.venv\\Scripts\\python.exe'
+        : 'python'
+
+const npmExecutable =
+    process.platform === 'win32'
+        ? 'npm.cmd'
+        : 'npm'
+
 export default defineConfig({
     testDir: './e2e',
     fullyParallel: true,
@@ -29,16 +39,23 @@ export default defineConfig({
     ],
     webServer: [
         {
-            command:
-                '.\\.venv\\Scripts\\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload --reload-dir app',
+            command: [
+                pythonExecutable,
+                '-m uvicorn app.main:app',
+                '--host 127.0.0.1',
+                '--port 8000',
+            ].join(' '),
             cwd: '../backend',
             url: 'http://127.0.0.1:8000/health',
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
         },
         {
-            command:
-                'npm.cmd run dev -- --host localhost',
+            command: [
+                npmExecutable,
+                'run dev',
+                '-- --host localhost',
+            ].join(' '),
             url: 'http://localhost:5173',
             reuseExistingServer: !process.env.CI,
             timeout: 120_000,
