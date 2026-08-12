@@ -1,4 +1,5 @@
 from celery import Celery
+from celery.schedules import crontab
 
 from app.core.config import Settings, get_settings
 
@@ -12,6 +13,7 @@ def create_celery_app(settings: Settings | None = None) -> Celery:
             "app.workers.monitor_tasks",
             "app.workers.scheduler_tasks",
             "app.workers.notification_tasks",
+            "app.workers.metric_tasks",
         ),
     )
     application.conf.update(
@@ -26,6 +28,19 @@ def create_celery_app(settings: Settings | None = None) -> Celery:
         timezone="UTC",
         worker_prefetch_multiplier=1,
         beat_schedule={
+            "purge-expired-monitor-checks": {
+                "task": ("app.workers.metric_tasks.purge_expired_monitor_checks"),
+                "schedule": crontab(
+                    hour=3,
+                    minute=30,
+                ),
+                "options": {"queue": "monitoring"},
+            },
+            "aggregate-hourly-monitor-metrics": {
+                "task": ("app.workers.metric_tasks.aggregate_hourly_metrics"),
+                "schedule": crontab(minute=5),
+                "options": {"queue": "monitoring"},
+            },
             "dispatch-pending-notifications": {
                 "task": (
                     "app.workers.notification_tasks.dispatch_pending_notifications"

@@ -60,6 +60,7 @@ def test_websocket_consumes_ticket_and_forwards_event() -> None:
         client.websocket_connect(f"/api/v1/realtime/ws?ticket={ticket}") as websocket,
     ):
         assert websocket.receive_text() == payload
+        websocket.close()
 
     ticket_hash = sha256(ticket.encode("utf-8")).hexdigest()
     redis_client.getdel.assert_awaited_once_with(f"realtime-ticket:{ticket_hash}")

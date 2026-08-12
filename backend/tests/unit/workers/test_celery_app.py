@@ -30,12 +30,16 @@ def test_create_celery_app_uses_secure_worker_defaults() -> None:
         "app.workers.monitor_tasks",
         "app.workers.scheduler_tasks",
         "app.workers.notification_tasks",
+        "app.workers.metric_tasks",
     )
 
     schedule = application.conf.beat_schedule["schedule-due-monitors"]
     notification_schedule = application.conf.beat_schedule[
         "dispatch-pending-notifications"
     ]
+    metric_schedule = application.conf.beat_schedule["aggregate-hourly-monitor-metrics"]
+    retention_schedule = application.conf.beat_schedule["purge-expired-monitor-checks"]
+
     assert notification_schedule["task"] == (
         "app.workers.notification_tasks.dispatch_pending_notifications"
     )
@@ -44,3 +48,22 @@ def test_create_celery_app_uses_secure_worker_defaults() -> None:
     assert schedule["task"] == ("app.workers.scheduler_tasks.schedule_due_monitors")
     assert schedule["schedule"] == 7.0
     assert schedule["options"] == {"queue": "monitoring"}
+    assert metric_schedule["task"] == (
+        "app.workers.metric_tasks.aggregate_hourly_metrics"
+    )
+    assert set(metric_schedule["schedule"].minute) == {5}
+    assert metric_schedule["options"] == {
+        "queue": "monitoring",
+    }
+    assert retention_schedule["task"] == (
+        "app.workers.metric_tasks.purge_expired_monitor_checks"
+    )
+    assert set(
+        retention_schedule["schedule"].hour,
+    ) == {3}
+    assert set(
+        retention_schedule["schedule"].minute,
+    ) == {30}
+    assert retention_schedule["options"] == {
+        "queue": "monitoring",
+    }

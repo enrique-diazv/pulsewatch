@@ -111,7 +111,7 @@ class MonitorCheckRepository:
         ).where(
             MonitorCheck.monitor_id == monitor_id,
             MonitorCheck.checked_at >= from_timestamp,
-            MonitorCheck.checked_at <= to_timestamp,
+            MonitorCheck.checked_at < to_timestamp,
         )
         result = await self.session.execute(statement)
         row = result.one()

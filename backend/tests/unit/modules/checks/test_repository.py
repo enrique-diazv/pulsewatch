@@ -242,6 +242,7 @@ async def test_summarize_for_monitor_aggregates_selected_range() -> None:
 
     assert f"monitor_checks.monitor_id = '{monitor_id}'" in sql
     assert "monitor_checks.checked_at >=" in sql
-    assert "monitor_checks.checked_at <=" in sql
+    assert "monitor_checks.checked_at <" in sql
+    assert "monitor_checks.checked_at <=" not in sql
     assert "count(monitor_checks.id)" in sql
     assert "avg(monitor_checks.response_time_ms)" in sql

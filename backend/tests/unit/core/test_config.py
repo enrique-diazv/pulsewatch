@@ -33,6 +33,8 @@ SETTING_VARIABLES = (
     "SMTP_USE_TLS",
     "SMTP_START_TLS",
     "REALTIME_TICKET_TTL_SECONDS",
+    "RAW_CHECK_RETENTION_DAYS",
+    "RETENTION_BATCH_SIZE",
 )
 
 
@@ -81,6 +83,8 @@ def test_settings_use_default_values(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.smtp_start_tls is False
     assert settings.realtime_ticket_ttl_seconds == 30
     assert settings.dashboard_cache_ttl_seconds == 30
+    assert settings.raw_check_retention_days == 30
+    assert settings.retention_batch_size == 10_000
 
 
 def test_settings_read_environment_variables(
@@ -143,6 +147,14 @@ def test_settings_read_environment_variables(
         "DASHBOARD_CACHE_TTL_SECONDS",
         "45",
     )
+    monkeypatch.setenv(
+        "RAW_CHECK_RETENTION_DAYS",
+        "45",
+    )
+    monkeypatch.setenv(
+        "RETENTION_BATCH_SIZE",
+        "5000",
+    )
     settings = Settings(_env_file=None)
 
     assert settings.app_name == "PulseWatch Test API"
@@ -180,3 +192,5 @@ def test_settings_read_environment_variables(
     assert settings.smtp_start_tls is False
     assert settings.realtime_ticket_ttl_seconds == 45
     assert settings.dashboard_cache_ttl_seconds == 45
+    assert settings.raw_check_retention_days == 45
+    assert settings.retention_batch_size == 5000

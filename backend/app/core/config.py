@@ -39,6 +39,16 @@ class Settings(BaseSettings):
         ge=5,
         le=300,
     )
+    raw_check_retention_days: int = Field(
+        default=30,
+        ge=7,
+        le=365,
+    )
+    retention_batch_size: int = Field(
+        default=10_000,
+        ge=100,
+        le=100_000,
+    )
     manual_check_cooldown_seconds: int = Field(
         default=10,
         ge=5,
