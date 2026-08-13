@@ -1,0 +1,43 @@
+services:
+  - type: web
+    name: pulsewatch-api-demo
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerContext: ./backend
+    dockerfilePath: ./backend/Dockerfile
+    dockerCommand: sh /app/scripts/start-demo.sh
+    healthCheckPath: /health
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: LOG_LEVEL
+        value: INFO
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: pulsewatch-redis-demo
+          property: connectionString
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: CORS_ALLOWED_ORIGINS
+        value: '["http://localhost:5173"]'
+      - key: EMAIL_DELIVERY_MODE
+        value: log
+      - key: WEB_CONCURRENCY
+        value: "1"
+      - key: WORKER_CONCURRENCY
+        value: "1"
+
+  - type: keyvalue
+    name: pulsewatch-redis-demo
+    plan: free
+    region: oregon
+    ipAllowList: []
+    maxmemoryPolicy: noeviction
+    persistenceMode: off

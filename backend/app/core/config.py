@@ -1,8 +1,8 @@
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import Field, RedisDsn, SecretStr
+from pydantic import Field, RedisDsn, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
@@ -32,7 +32,8 @@ class Settings(BaseSettings):
     database_port: int = 5432
     database_name: str = "pulsewatch"
     database_user: str = "pulsewatch_app"
-    database_password: SecretStr
+    database_url: SecretStr | None = None
+    database_password: SecretStr | None = None
     redis_url: RedisDsn = RedisDsn("redis://127.0.0.1:6379/0")
     dashboard_cache_ttl_seconds: int = Field(
         default=30,
@@ -107,6 +108,15 @@ class Settings(BaseSettings):
         ge=10,
         le=120,
     )
+
+    @model_validator(mode="after")
+    def validate_database_configuration(self) -> Self:
+        if self.database_url is None and self.database_password is None:
+            raise ValueError(
+                "DATABASE_PASSWORD is required when DATABASE_URL is not set"
+            )
+
+        return self
 
 
 @lru_cache

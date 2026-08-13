@@ -22,9 +22,11 @@ RUN python -m pip install --upgrade pip \
 
 COPY alembic.ini ./
 COPY migrations ./migrations
+COPY scripts ./scripts
 COPY app ./app
 
-RUN chown --recursive pulsewatch:pulsewatch /app
+RUN chmod +x /app/scripts/start-demo.sh \
+    && chown --recursive pulsewatch:pulsewatch /app
 
 USER pulsewatch
 

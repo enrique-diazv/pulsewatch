@@ -9,6 +9,8 @@ SETTING_VARIABLES = (
     "DASHBOARD_CACHE_TTL_SECONDS",
     "DEBUG",
     "LOG_LEVEL",
+    "DATABASE_URL",
+    "DATABASE_HOST",
     "DATABASE_HOST",
     "DATABASE_PORT",
     "DATABASE_NAME",
@@ -194,3 +196,41 @@ def test_settings_read_environment_variables(
     assert settings.dashboard_cache_ttl_seconds == 45
     assert settings.raw_check_retention_days == 45
     assert settings.retention_batch_size == 5000
+
+
+def test_settings_accept_database_url_without_password(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database_url = (
+        "postgresql://neondb_owner:secret@ep-example.neon.tech/neondb?sslmode=require"
+    )
+    monkeypatch.delenv("DATABASE_PASSWORD", raising=False)
+    monkeypatch.setenv("DATABASE_URL", database_url)
+    monkeypatch.setenv(
+        "JWT_SECRET_KEY",
+        "test-jwt-secret-key-with-at-least-32-characters",
+    )
+
+    settings = Settings(_env_file=None)
+
+    assert settings.database_url is not None
+    assert settings.database_url.get_secret_value() == database_url
+    assert settings.database_password is None
+    assert str(settings.database_url) == "**********"
+
+
+def test_settings_require_database_url_or_password(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.delenv("DATABASE_PASSWORD", raising=False)
+    monkeypatch.setenv(
+        "JWT_SECRET_KEY",
+        "test-jwt-secret-key-with-at-least-32-characters",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="DATABASE_PASSWORD is required",
+    ):
+        Settings(_env_file=None)
