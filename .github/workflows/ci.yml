@@ -235,3 +235,85 @@ jobs:
           --file compose.production.yml
           config
           --quiet
+
+  production-stack:
+    name: Production stack smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs:
+      - backend-image
+      - frontend-image
+      - production-compose
+
+    env:
+      APP_ORIGIN: http://127.0.0.1:8080
+      APP_PORT: "8080"
+      DATABASE_PASSWORD: pulsewatch-stack-ci-password
+      JWT_SECRET_KEY: pulsewatch-stack-ci-secret-at-least-32-characters
+      WEB_CONCURRENCY: "2"
+      WORKER_CONCURRENCY: "2"
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Start production stack
+        run: >
+          docker compose
+          --file compose.production.yml
+          up
+          --detach
+          --build
+
+      - name: Wait for frontend health
+        shell: bash
+        run: |
+          for attempt in {1..60}; do
+              if curl \
+                  --fail \
+                  --silent \
+                  http://127.0.0.1:8080/health
+              then
+                  exit 0
+              fi
+
+              sleep 2
+          done
+
+          exit 1
+
+      - name: Verify API, proxy, and database
+        run: >
+          curl
+          --fail
+          --silent
+          --show-error
+          --request POST
+          --header "Content-Type: application/json"
+          --data
+          '{"email":"compose-smoke@example.com","password":"pulsewatch-smoke"}'
+          http://127.0.0.1:8080/api/v1/auth/register
+
+      - name: Show service status
+        if: always()
+        run: >
+          docker compose
+          --file compose.production.yml
+          ps
+
+      - name: Show service logs on failure
+        if: failure()
+        run: >
+          docker compose
+          --file compose.production.yml
+          logs
+          --no-color
+
+      - name: Stop production stack
+        if: always()
+        run: >
+          docker compose
+          --file compose.production.yml
+          down
+          --volumes
+          --remove-orphans
