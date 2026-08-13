@@ -67,6 +67,8 @@ services:
     restart: unless-stopped
 
   migrate:
+    healthcheck:
+      disable: true
     <<: *backend-service
     command:
       - python
@@ -122,6 +124,8 @@ services:
       - --loglevel=INFO
       - --queues=monitoring,notifications
       - --concurrency=${WORKER_CONCURRENCY:-4}
+    healthcheck:
+      disable: true
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -139,6 +143,8 @@ services:
       - beat
       - --loglevel=INFO
       - --schedule=/tmp/celerybeat-schedule
+    healthcheck:
+      disable: true
     depends_on:
       migrate:
         condition: service_completed_successfully
