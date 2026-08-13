@@ -215,26 +215,23 @@ jobs:
           --format '{{.Config.User}}')"
           = "nginx"
 
-  frontend-image:
-    name: Frontend container
+  production-compose:
+    name: Production Compose
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
+
+    env:
+      APP_ORIGIN: https://pulsewatch.example.com
+      DATABASE_PASSWORD: pulsewatch-compose-ci-password
+      JWT_SECRET_KEY: pulsewatch-compose-ci-secret-at-least-32-characters
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
 
-      - name: Build frontend image
+      - name: Validate production Compose
         run: >
-          docker build
-          --file frontend/Dockerfile
-          --tag pulsewatch-frontend:ci
-          frontend
-
-      - name: Inspect image runtime user
-        run: >
-          test
-          "$(docker image inspect
-          pulsewatch-frontend:ci
-          --format '{{.Config.User}}')"
-          = "nginx"
+          docker compose
+          --file compose.production.yml
+          config
+          --quiet
