@@ -2,7 +2,7 @@
 
 [English](#english) | [Español](#español)
 
-[Live demo](https://pulsewatch-steel.vercel.app/) · [Deployment guide](docs/deployment.md) · [Load-testing report](docs/load-testing.md)
+[Live demo](https://pulsewatch-steel.vercel.app/) · [Architecture](docs/architecture.md) · [Database](docs/database.md) · [Security](docs/security.md) · [Deployment guide](docs/deployment.md) · [Load-testing report](docs/load-testing.md)
 
 PulseWatch is a full-stack website and HTTP API monitoring platform. It runs
 scheduled checks, records availability and latency, detects incidents, sends
@@ -10,6 +10,16 @@ notifications, and updates its dashboard in real time.
 
 > The public demo uses free hosting. Its backend can take about one minute to
 > wake after inactivity, and scheduled monitoring pauses while it is asleep.
+
+## Product screenshots / Capturas del producto
+
+### Landing page / Portada
+
+![PulseWatch animated monitoring landing page](docs/images/landing-page.png)
+
+| Operational monitor / Monitor operativo | Check history / Historial de checks |
+| --- | --- |
+| ![Operational monitor details](docs/images/monitor-operational.png) | ![Monitor response-time history](docs/images/check-history.png) |
 
 ---
 
