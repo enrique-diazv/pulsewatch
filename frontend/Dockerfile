@@ -20,7 +20,7 @@ COPY --from=build /app/dist /usr/share/nginx/html
 
 RUN sed \
         --in-place \
-        's#pid /run/nginx.pid;#pid /tmp/nginx.pid;#' \
+        's#^[[:space:]]*pid[[:space:]].*;#pid /tmp/nginx.pid;#' \
         /etc/nginx/nginx.conf \
     && chown \
         --recursive \
