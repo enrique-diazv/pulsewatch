@@ -3,6 +3,11 @@ const apiBaseUrl = (
   'http://localhost:8000/api/v1'
 ).replace(/\/$/, '')
 
+const webSocketBaseUrl = (
+    import.meta.env.VITE_WEBSOCKET_BASE_URL ??
+    apiBaseUrl
+).replace(/\/$/, '')
+
 let accessToken: string | null = null
 
 export class ApiError extends Error {
@@ -37,7 +42,7 @@ export function clearAccessToken() {
 
 export function buildWebSocketUrl(path: string): URL {
   const url = new URL(
-    `${apiBaseUrl}${path}`,
+    `${webSocketBaseUrl}${path}`,
     window.location.origin,
   )
 
